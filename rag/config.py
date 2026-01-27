@@ -1,6 +1,9 @@
 """Configuration for RAG system using Pydantic Settings."""
 
 from pathlib import Path
+from typing import List
+
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -37,6 +40,13 @@ class RAGConfig(BaseSettings):
     # Performance
     embedding_batch_size: int = 32
     use_mps: bool = True  # Apple Silicon acceleration
+
+    # Web search (DuckDuckGo - no API key required)
+    websearch_enabled: bool = False
+    websearch_site_filters: List[str] = Field(
+        default_factory=lambda: ["muenster.de", "stadt-muenster.de", "muensterland.de"]
+    )
+    websearch_max_results: int = 5
 
     @property
     def wiki_db_path_resolved(self) -> Path:
