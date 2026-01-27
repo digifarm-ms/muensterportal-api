@@ -21,6 +21,8 @@ class RetrievalResult:
     content_text: str
     similarity_score: float
     page_len: int
+    source: str = "wiki"  # "wiki" or "web"
+    source_url: str | None = None  # URL for web results
 
 
 class WikiRetriever:

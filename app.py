@@ -7,6 +7,7 @@ import streamlit as st
 from rag.config import config
 from rag.generation import RAGGenerator
 from rag.retrieval import WikiRetriever
+from rag.websearch import DuckDuckGoSearcher
 
 # Page configuration
 st.set_page_config(
@@ -24,6 +25,11 @@ def load_retriever():
 def load_generator():
     """Load and cache the generator."""
     return RAGGenerator()
+
+
+def get_web_searcher(site_filters: list[str], max_results: int, embedder=None) -> DuckDuckGoSearcher:
+    """Get DuckDuckGo web searcher with optional embedder for semantic scoring."""
+    return DuckDuckGoSearcher(site_filters=site_filters, max_results=max_results, embedder=embedder)
 
 
 def main():
@@ -52,6 +58,42 @@ def main():
             value=config.default_temperature,
             step=0.1,
             help="Höhere Werte = kreativere Antworten, niedrigere Werte = präzisere Antworten",
+        )
+
+        st.divider()
+
+        # Web search settings
+        st.subheader("🌐 Web-Suche")
+
+        websearch_enabled = st.checkbox(
+            "Web-Suche aktivieren",
+            value=False,
+            help="Durchsucht zusätzlich das Web (via DuckDuckGo). Hinweis: Ergebnisse können aufgrund von Rate-Limiting variieren.",
+        )
+
+        available_sites = [
+            "muenster.de",
+            "stadt-muenster.de",
+            "muensterland.de",
+            "wn.de",
+            "muenster.org",
+        ]
+
+        site_filters = st.multiselect(
+            "Website-Filter",
+            options=available_sites,
+            default=config.websearch_site_filters[:3],
+            disabled=not websearch_enabled,
+            help="Suche auf diese Domains beschränken",
+        )
+
+        web_results_count = st.slider(
+            "Anzahl Web-Ergebnisse",
+            min_value=1,
+            max_value=10,
+            value=config.websearch_max_results,
+            disabled=not websearch_enabled,
+            help="Wie viele Web-Ergebnisse sollen einbezogen werden?",
         )
 
         st.divider()
@@ -108,28 +150,62 @@ def main():
                 retriever = load_retriever()
                 generator = load_generator()
 
-            # Retrieve documents
-            with st.spinner("Suche relevante Dokumente..."):
+            # Retrieve wiki documents
+            with st.spinner("Suche relevante Wiki-Dokumente..."):
                 start_time = time.time()
-                results = retriever.retrieve(question, top_k=top_k)
-                retrieval_time = time.time() - start_time
+                wiki_results = retriever.retrieve(question, top_k=top_k)
+                wiki_retrieval_time = time.time() - start_time
 
-            if not results:
+            # Retrieve web results if enabled
+            web_results = []
+            web_retrieval_time = 0.0
+            if websearch_enabled and site_filters:
+                with st.spinner("Suche im Web (DuckDuckGo)..."):
+                    start_time = time.time()
+                    # Pass embedder for semantic similarity scoring
+                    web_searcher = get_web_searcher(
+                        site_filters, web_results_count, embedder=retriever.embedder
+                    )
+                    web_results = web_searcher.retrieve(question)
+                    web_retrieval_time = time.time() - start_time
+
+            # Merge and sort results by score
+            all_results = wiki_results + web_results
+            all_results.sort(key=lambda x: x.similarity_score, reverse=True)
+
+            retrieval_time = wiki_retrieval_time + web_retrieval_time
+
+            if not all_results:
                 st.warning(
                     "⚠️ Keine relevanten Dokumente gefunden. Versuche eine andere Frage."
                 )
                 return
 
             # Display retrieved documents
-            st.subheader(f"📚 Gefundene Dokumente ({len(results)})")
+            wiki_count = len(wiki_results)
+            web_count = len(web_results)
+            source_info = f"{wiki_count} Wiki"
+            if web_count > 0:
+                source_info += f", {web_count} Web"
+            st.subheader(f"📚 Gefundene Dokumente ({source_info})")
 
             # Create columns for document cards
-            for i, result in enumerate(results, 1):
+            for i, result in enumerate(all_results, 1):
+                # Source icon
+                source_icon = "🌐" if result.source == "web" else "📖"
+                source_label = "Web" if result.source == "web" else "Wiki"
+
                 with st.expander(
-                    f"**{i}. {result.page_title}** - Relevanz: {result.similarity_score:.1%}",
+                    f"**{i}. {source_icon} [{source_label}] {result.page_title}** - Relevanz: {result.similarity_score:.1%}",
                     expanded=(i == 1),  # Expand first result
                 ):
+                    st.markdown(f"**Quelle:** {source_label}")
                     st.markdown(f"**Ähnlichkeit:** {result.similarity_score:.3f}")
+
+                    # Show URL for web results
+                    if result.source == "web" and result.source_url:
+                        st.markdown(f"**URL:** [{result.source_url}]({result.source_url})")
+
                     st.markdown(f"**Länge:** {result.page_len} Zeichen")
                     st.divider()
 
@@ -148,7 +224,7 @@ def main():
 
             with st.spinner("Generiere Antwort..."):
                 start_time = time.time()
-                answer = generator.generate(question, results, temperature=temperature)
+                answer = generator.generate(question, all_results, temperature=temperature)
                 generation_time = time.time() - start_time
 
             # Display answer in a nice box

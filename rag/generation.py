@@ -73,9 +73,15 @@ class RAGGenerator:
             if len(content) > 2000:
                 content = content[:2000] + "..."
 
-            context_parts.append(
-                f"[Dokument {i}: {result.page_title}]\n{content}\n"
-            )
+            # Add source label (Wiki or Web)
+            source_label = "Web" if result.source == "web" else "Wiki"
+            header = f"[Dokument {i} ({source_label}): {result.page_title}]"
+
+            # Add URL for web sources
+            if result.source == "web" and result.source_url:
+                header += f"\nURL: {result.source_url}"
+
+            context_parts.append(f"{header}\n{content}\n")
 
         return "\n".join(context_parts)
 
