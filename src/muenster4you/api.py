@@ -4,7 +4,6 @@ from contextlib import asynccontextmanager
 from typing import Optional
 
 from fastapi import FastAPI, Query
-from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from muenster4you.rag.config import config
@@ -39,13 +38,6 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Muenster4You API", version="0.1.0", lifespan=lifespan)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["https://www.muenster4you.de", "https://muenster4you.de"],
-    allow_methods=["GET", "POST"],
-    allow_headers=["*"],
-)
 
 
 class QueryRequest(BaseModel):
