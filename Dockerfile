@@ -9,6 +9,7 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 COPY pyproject.toml uv.lock README.md ./
 COPY src/ ./src/
 COPY wiki.sqlite ./
+COPY data/ ./data/
 
 # Install dependencies and the package
 RUN uv sync --frozen --no-cache --no-dev

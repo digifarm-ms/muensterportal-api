@@ -9,9 +9,7 @@ wheels/
 # Virtual environments
 .venv
 
-# Data files
-data/
-*.parquet
+# Data files (wiki_embeddings.parquet is tracked for deployment)
 
 # Environment
 .env
