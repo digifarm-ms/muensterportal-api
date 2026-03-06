@@ -1,18 +1,14 @@
 """Extract and clean wiki pages from MediaWiki SQLite database."""
 
 import re
-import sys
 from dataclasses import dataclass
-from pathlib import Path
 from typing import List
 
 import mwparserfromhell
 
-# Add parent directory to path to import MediaWikiDB
-sys.path.insert(0, str(Path(__file__).parent.parent))
-from get_page_content import MediaWikiDB
+from muenster4you.db.mediawiki import MediaWikiDB
 
-from rag.config import config
+from .config import config
 
 
 @dataclass

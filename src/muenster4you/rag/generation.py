@@ -4,8 +4,8 @@ from typing import Iterator, List
 
 import ollama
 
-from rag.config import config
-from rag.retrieval import RetrievalResult
+from .config import config
+from .retrieval import RetrievalResult
 
 
 # German RAG prompt template
@@ -189,7 +189,7 @@ class RAGGenerator:
 
 if __name__ == "__main__":
     # Test generation with dummy context
-    from rag.retrieval import RetrievalResult
+    from .retrieval import RetrievalResult
 
     dummy_docs = [
         RetrievalResult(

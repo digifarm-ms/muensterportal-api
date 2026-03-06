@@ -7,7 +7,7 @@ import torch
 from rich.progress import track
 from sentence_transformers import SentenceTransformer
 
-from rag.config import config
+from .config import config
 
 
 class GermanEmbedder:

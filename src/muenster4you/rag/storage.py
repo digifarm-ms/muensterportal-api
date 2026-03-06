@@ -6,7 +6,7 @@ from typing import List, Tuple
 import numpy as np
 import polars as pl
 
-from rag.extraction import WikiPage
+from .extraction import WikiPage
 
 
 def save_embeddings(
@@ -105,7 +105,7 @@ def get_embedding_stats(df: pl.DataFrame) -> dict:
 
 if __name__ == "__main__":
     # Test with dummy data
-    from rag.extraction import WikiPage
+    from .extraction import WikiPage
 
     test_pages = [
         WikiPage(1, "TestPage1", "This is test content for page 1", 30),
