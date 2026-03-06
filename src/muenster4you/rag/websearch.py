@@ -7,11 +7,11 @@ import numpy as np
 from ddgs import DDGS
 from sentence_transformers import util
 
-from rag.config import config
-from rag.retrieval import RetrievalResult
+from .config import config
+from .retrieval import RetrievalResult
 
 if TYPE_CHECKING:
-    from rag.embeddings import GermanEmbedder
+    from .embeddings import GermanEmbedder
 
 
 @dataclass

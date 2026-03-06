@@ -7,9 +7,9 @@ import numpy as np
 import torch
 from sentence_transformers import util
 
-from rag.config import config
-from rag.embeddings import GermanEmbedder
-from rag.storage import load_embeddings
+from .config import config
+from .embeddings import GermanEmbedder
+from .storage import load_embeddings
 
 
 @dataclass

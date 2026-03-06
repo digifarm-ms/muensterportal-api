@@ -6,10 +6,10 @@ from pathlib import Path
 from rich.console import Console
 from rich.table import Table
 
-from rag.config import config
-from rag.embeddings import GermanEmbedder
-from rag.extraction import extract_all_pages
-from rag.storage import get_embedding_stats, load_embeddings, save_embeddings
+from .config import config
+from .embeddings import GermanEmbedder
+from .extraction import extract_all_pages
+from .storage import get_embedding_stats, load_embeddings, save_embeddings
 
 console = Console()
 
@@ -99,8 +99,8 @@ def query_system(question: str, top_k: int = None) -> None:
         question: Question to ask
         top_k: Number of documents to retrieve
     """
-    from rag.retrieval import WikiRetriever
-    from rag.generation import RAGGenerator
+    from .retrieval import WikiRetriever
+    from .generation import RAGGenerator
 
     if top_k is None:
         top_k = config.default_top_k
@@ -135,9 +135,9 @@ def main():
     """Main CLI entry point."""
     if len(sys.argv) < 2:
         console.print("[bold red]Usage:[/bold red]")
-        console.print("  python -m rag.pipeline build         - Build embeddings")
-        console.print("  python -m rag.pipeline stats         - Show statistics")
-        console.print('  python -m rag.pipeline query "text"  - Query the system')
+        console.print("  python -m muenster4you.rag.pipeline build         - Build embeddings")
+        console.print("  python -m muenster4you.rag.pipeline stats         - Show statistics")
+        console.print('  python -m muenster4you.rag.pipeline query "text"  - Query the system')
         sys.exit(1)
 
     command = sys.argv[1].lower()
