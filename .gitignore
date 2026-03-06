@@ -8,3 +8,14 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Data files
+data/
+*.parquet
+
+# Environment
+.env
+
+# MediaWiki download
+mediawiki-1.44.0/
+mediawiki-1.44.0.tar.gz
