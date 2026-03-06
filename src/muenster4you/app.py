@@ -4,10 +4,10 @@ import time
 
 import streamlit as st
 
-from rag.config import config
-from rag.generation import RAGGenerator
-from rag.retrieval import WikiRetriever
-from rag.websearch import DuckDuckGoSearcher
+from muenster4you.rag.config import config
+from muenster4you.rag.generation import RAGGenerator
+from muenster4you.rag.retrieval import WikiRetriever
+from muenster4you.rag.websearch import DuckDuckGoSearcher
 
 # Page configuration
 st.set_page_config(
