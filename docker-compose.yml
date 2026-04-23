@@ -3,6 +3,7 @@ services:
   backend:
     restart: unless-stopped
     build: .
+    env_file: .env
     ports:
       - "8000:8000"
     container_name: muensterportal-api
