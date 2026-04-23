@@ -12,13 +12,12 @@ dependencies = [
     "polars>=0.20.0",
     "pyarrow>=15.0.0",
     "streamlit>=1.31.0",
-    "ollama>=0.4.0",
+    "openai>=1.75.0",
     "mwparserfromhell>=0.6.6",
     "numpy>=1.26.0",
     "pydantic-settings>=2.1.0",
     "rich>=13.7.0",
     "ddgs>=8.0.0",
-    "mistralai>=1.12.4",
 ]
 
 [dependency-groups]

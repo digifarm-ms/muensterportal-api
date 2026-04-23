@@ -1,8 +1,8 @@
-"""Generation layer using Ollama for RAG responses."""
+"""Generation layer using OpenAI-compatible API for RAG responses."""
 
 from typing import Iterator, List
 
-import ollama
+from openai import OpenAI
 
 from .config import config
 from .retrieval import RetrievalResult
@@ -41,44 +41,37 @@ Kontext-Dokumente:
 
 
 class RAGGenerator:
-    """Generator for RAG responses using Ollama."""
+    """Generator for RAG responses using OpenAI-compatible APIs (Ollama or Mistral)."""
 
     def __init__(
         self,
-        model_name: str = None,
-        ollama_url: str = None,
-        temperature: float = None,
-        max_tokens: int = None
+        model_name: str | None = None,
+        ollama_url: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
     ):
-        """
-        Initialize the RAG generator.
-
-        Args:
-            model_name: Ollama model name
-            ollama_url: Ollama server URL
-            temperature: Generation temperature
-            max_tokens: Maximum tokens to generate
-        """
-        self.model_name = model_name or config.generation_model
-        self.ollama_url = ollama_url or config.ollama_url
+        self.provider = config.llm_provider
         self.default_temperature = temperature or config.default_temperature
         self.default_max_tokens = max_tokens or config.default_max_tokens
 
-        # Configure ollama client
-        self.client = ollama.Client(host=self.ollama_url)
+        if self.provider == "mistral":
+            self.model_name = model_name or config.mistral_model
+            self.client = OpenAI(
+                base_url="https://api.mistral.ai/v1",
+                api_key=config.mistral_api_key,
+            )
+        else:
+            self.model_name = model_name or config.generation_model
+            base_url = ollama_url or config.ollama_url
+            self.client = OpenAI(
+                base_url=f"{base_url}/v1",
+                api_key="ollama",
+            )
 
-        print(f"RAG Generator initialized with model: {self.model_name}")
+        print(f"RAG Generator initialized with provider={self.provider}, model={self.model_name}")
 
     def _format_context(self, results: List[RetrievalResult]) -> str:
-        """
-        Format retrieved documents into context string.
-
-        Args:
-            results: List of retrieval results
-
-        Returns:
-            Formatted context string
-        """
+        """Format retrieved documents into context string."""
         context_parts = []
 
         for i, result in enumerate(results, 1):
@@ -99,54 +92,90 @@ class RAGGenerator:
 
         return "\n".join(context_parts)
 
+    def _call(self, prompt: str, temperature: float, max_tokens: int) -> str:
+        """Single-turn generation: send a prompt, get a text response."""
+        if self.provider == "mistral":
+            response = self.client.chat.completions.create(
+                model=self.model_name,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            return response.choices[0].message.content or ""
+        else:
+            response = self.client.responses.create(
+                model=self.model_name,
+                input=prompt,
+                temperature=temperature,
+                max_output_tokens=max_tokens,
+            )
+            return response.output_text
+
+    def _call_chat(self, messages: list[dict], temperature: float, max_tokens: int) -> str:
+        """Multi-turn generation: send a message history, get a text response."""
+        if self.provider == "mistral":
+            response = self.client.chat.completions.create(
+                model=self.model_name,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            return response.choices[0].message.content or ""
+        else:
+            response = self.client.responses.create(
+                model=self.model_name,
+                input=messages,
+                temperature=temperature,
+                max_output_tokens=max_tokens,
+            )
+            return response.output_text
+
+    def _call_stream(self, prompt: str, temperature: float, max_tokens: int) -> Iterator[str]:
+        """Streaming single-turn generation."""
+        if self.provider == "mistral":
+            stream = self.client.chat.completions.create(
+                model=self.model_name,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=temperature,
+                max_tokens=max_tokens,
+                stream=True,
+            )
+            for chunk in stream:
+                if chunk.choices[0].delta.content:
+                    yield chunk.choices[0].delta.content
+        else:
+            stream = self.client.responses.create(
+                model=self.model_name,
+                input=prompt,
+                temperature=temperature,
+                max_output_tokens=max_tokens,
+                stream=True,
+            )
+            for event in stream:
+                if event.type == "response.output_text.delta":
+                    yield event.delta
+
     def generate(
         self,
         query: str,
         context_docs: List[RetrievalResult],
-        temperature: float = None,
-        max_tokens: int = None
+        temperature: float | None = None,
+        max_tokens: int | None = None,
     ) -> str:
-        """
-        Generate an answer using retrieved context.
-
-        Args:
-            query: User question
-            context_docs: Retrieved documents
-            temperature: Generation temperature
-            max_tokens: Maximum tokens to generate
-
-        Returns:
-            Generated answer
-        """
+        """Generate an answer using retrieved context."""
         if temperature is None:
             temperature = self.default_temperature
-
         if max_tokens is None:
             max_tokens = self.default_max_tokens
 
-        # Format context
         context = self._format_context(context_docs)
-
-        # Build prompt
         prompt = GERMAN_RAG_PROMPT.format(context=context, query=query)
 
         try:
-            # Call Ollama
-            response = self.client.generate(
-                model=self.model_name,
-                prompt=prompt,
-                options={
-                    "temperature": temperature,
-                    "num_predict": max_tokens,
-                }
-            )
-
-            return response["response"]
-
+            return self._call(prompt, temperature, max_tokens)
         except Exception as e:
-            error_msg = f"Error generating response: {str(e)}"
-            print(error_msg)
-            return f"Entschuldigung, es gab einen Fehler bei der Generierung der Antwort: {str(e)}"
+            print(f"Error generating response: {e}")
+            return f"Entschuldigung, es gab einen Fehler bei der Generierung der Antwort: {e}"
 
     def build_system_message(self, context_docs: List[RetrievalResult]) -> dict:
         """Build a system message with RAG context for multi-turn chat."""
@@ -157,82 +186,42 @@ class RAGGenerator:
     def chat(
         self,
         messages: list[dict],
-        temperature: float = None,
-        max_tokens: int = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
     ) -> str:
-        """Generate a response using the ollama chat API with a message history."""
+        """Generate a response using a message history (multi-turn chat)."""
         if temperature is None:
             temperature = self.default_temperature
         if max_tokens is None:
             max_tokens = self.default_max_tokens
 
         try:
-            response = self.client.chat(
-                model=self.model_name,
-                messages=messages,
-                options={
-                    "temperature": temperature,
-                    "num_predict": max_tokens,
-                },
-            )
-            return response.message.content
-
+            return self._call_chat(messages, temperature, max_tokens)
         except Exception as e:
-            error_msg = f"Error generating chat response: {str(e)}"
-            print(error_msg)
-            return f"Entschuldigung, es gab einen Fehler bei der Generierung der Antwort: {str(e)}"
+            print(f"Error generating chat response: {e}")
+            return f"Entschuldigung, es gab einen Fehler bei der Generierung der Antwort: {e}"
 
     def generate_stream(
         self,
         query: str,
         context_docs: List[RetrievalResult],
-        temperature: float = None,
-        max_tokens: int = None
+        temperature: float | None = None,
+        max_tokens: int | None = None,
     ) -> Iterator[str]:
-        """
-        Generate an answer with streaming (for real-time display).
-
-        Args:
-            query: User question
-            context_docs: Retrieved documents
-            temperature: Generation temperature
-            max_tokens: Maximum tokens to generate
-
-        Yields:
-            Text chunks as they are generated
-        """
+        """Generate an answer with streaming (for real-time display)."""
         if temperature is None:
             temperature = self.default_temperature
-
         if max_tokens is None:
             max_tokens = self.default_max_tokens
 
-        # Format context
         context = self._format_context(context_docs)
-
-        # Build prompt
         prompt = GERMAN_RAG_PROMPT.format(context=context, query=query)
 
         try:
-            # Call Ollama with streaming
-            stream = self.client.generate(
-                model=self.model_name,
-                prompt=prompt,
-                stream=True,
-                options={
-                    "temperature": temperature,
-                    "num_predict": max_tokens,
-                }
-            )
-
-            for chunk in stream:
-                if "response" in chunk:
-                    yield chunk["response"]
-
+            yield from self._call_stream(prompt, temperature, max_tokens)
         except Exception as e:
-            error_msg = f"Error generating response: {str(e)}"
-            print(error_msg)
-            yield f"Entschuldigung, es gab einen Fehler bei der Generierung der Antwort: {str(e)}"
+            print(f"Error generating response: {e}")
+            yield f"Entschuldigung, es gab einen Fehler bei der Generierung der Antwort: {e}"
 
 
 if __name__ == "__main__":

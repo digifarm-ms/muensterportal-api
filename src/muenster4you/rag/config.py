@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import List
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -21,10 +21,20 @@ class RAGConfig(BaseSettings):
     wiki_db_path: str = "wiki.sqlite"
     embeddings_path: str = "data/wiki_embeddings.parquet"
 
+    # LLM provider: "ollama" or "mistral"
+    llm_provider: str = "ollama"
+
     # Model configuration
     embedding_model: str = "mixedbread-ai/deepset-mxbai-embed-de-large-v1"
     generation_model: str = "qwen3:30b"
     ollama_url: str = "http://localhost:11434"
+
+    # Mistral configuration
+    mistral_api_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("M4U_RAG_MISTRAL_API_KEY", "MISTRAL_API_KEY"),
+    )
+    mistral_model: str = "mistral-small-latest"
 
     # Extraction parameters
     min_page_length: int = 100
