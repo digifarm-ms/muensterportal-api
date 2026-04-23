@@ -81,3 +81,75 @@ def test_query_endpoint_custom_params(client, mock_retriever, mock_generator):
     mock_generator.generate.assert_called_once()
     _, kwargs = mock_generator.generate.call_args
     assert kwargs["temperature"] == 0.2
+
+
+# --- Chat endpoint tests ---
+
+
+def test_chat_new_conversation(client, mock_retriever, mock_generator):
+    mock_retriever.retrieve.return_value = [_make_retrieval_result()]
+    response = client.post("/chat", json={"message": "Was ist Münster?"})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["conversation_id"] is not None
+    assert data["answer"] == "Mock chat answer"
+    assert data["remaining_followups"] == 3
+    assert len(data["history"]) == 2  # user + assistant
+    assert data["history"][0]["role"] == "user"
+    assert data["history"][0]["content"] == "Was ist Münster?"
+    assert data["history"][1]["role"] == "assistant"
+    assert len(data["sources"]) == 1
+    mock_retriever.retrieve.assert_called_once()
+    mock_generator.build_system_message.assert_called_once()
+    mock_generator.chat.assert_called_once()
+
+
+def test_chat_followup(client, mock_retriever, mock_generator):
+    mock_retriever.retrieve.return_value = [_make_retrieval_result()]
+
+    # Start conversation
+    r1 = client.post("/chat", json={"message": "Was ist Münster?"})
+    conversation_id = r1.json()["conversation_id"]
+
+    # Follow-up (no new retrieval)
+    mock_retriever.retrieve.reset_mock()
+    r2 = client.post(
+        "/chat",
+        json={"message": "Erzähl mir mehr", "conversation_id": conversation_id},
+    )
+    assert r2.status_code == 200
+    data = r2.json()
+    assert data["conversation_id"] == conversation_id
+    assert data["remaining_followups"] == 2
+    assert len(data["history"]) == 4  # 2 user + 2 assistant
+    mock_retriever.retrieve.assert_not_called()
+
+
+def test_chat_max_followups_exceeded(client, mock_retriever, mock_generator):
+    mock_retriever.retrieve.return_value = [_make_retrieval_result()]
+
+    # Start + 3 follow-ups = 4 turns total (the max)
+    r = client.post("/chat", json={"message": "Frage 1"})
+    cid = r.json()["conversation_id"]
+    for i in range(3):
+        r = client.post("/chat", json={"message": f"Frage {i+2}", "conversation_id": cid})
+    assert r.json()["remaining_followups"] == 0
+
+    # 5th message should be rejected
+    r = client.post("/chat", json={"message": "Frage 5", "conversation_id": cid})
+    assert r.status_code == 400
+    assert "Rückfragen" in r.json()["detail"]
+
+
+def test_chat_invalid_conversation_id_creates_new(client, mock_retriever, mock_generator):
+    mock_retriever.retrieve.return_value = [_make_retrieval_result()]
+    response = client.post(
+        "/chat",
+        json={"message": "Hallo", "conversation_id": "nonexistent-id"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    # Should have created a new session with a different id
+    assert data["conversation_id"] != "nonexistent-id"
+    assert data["remaining_followups"] == 3
+    mock_retriever.retrieve.assert_called_once()  # retrieval ran (new session)

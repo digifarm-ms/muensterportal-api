@@ -8,7 +8,7 @@ from .config import config
 from .retrieval import RetrievalResult
 
 
-# German RAG prompt template
+# German RAG prompt template (single-turn)
 GERMAN_RAG_PROMPT = """Du bist ein hilfreicher Assistent für Informationen über die Stadt Münster in Deutschland. Deine Aufgabe ist es, Fragen basierend auf den bereitgestellten Dokumenten zu beantworten.
 
 Kontext-Dokumente:
@@ -24,6 +24,20 @@ Anweisungen:
 - Zitiere relevante Dokumente wenn möglich (z.B. "Laut [Dokument: Titel]...")
 
 Antwort:"""
+
+# German RAG system prompt for multi-turn chat
+GERMAN_RAG_CHAT_SYSTEM_PROMPT = """Du bist ein hilfreicher Assistent für Informationen über die Stadt Münster in Deutschland. Deine Aufgabe ist es, Fragen basierend auf den bereitgestellten Dokumenten zu beantworten.
+
+Anweisungen:
+- Antworte auf Deutsch
+- Basiere deine Antwort ausschließlich auf den bereitgestellten Dokumenten
+- Sei präzise und hilfreich
+- Wenn die Information nicht in den Dokumenten zu finden ist, sage das ehrlich
+- Zitiere relevante Dokumente wenn möglich (z.B. "Laut [Dokument: Titel]...")
+- Berücksichtige den bisherigen Gesprächsverlauf bei deinen Antworten
+
+Kontext-Dokumente:
+{context}"""
 
 
 class RAGGenerator:
@@ -131,6 +145,40 @@ class RAGGenerator:
 
         except Exception as e:
             error_msg = f"Error generating response: {str(e)}"
+            print(error_msg)
+            return f"Entschuldigung, es gab einen Fehler bei der Generierung der Antwort: {str(e)}"
+
+    def build_system_message(self, context_docs: List[RetrievalResult]) -> dict:
+        """Build a system message with RAG context for multi-turn chat."""
+        context = self._format_context(context_docs)
+        content = GERMAN_RAG_CHAT_SYSTEM_PROMPT.format(context=context)
+        return {"role": "system", "content": content}
+
+    def chat(
+        self,
+        messages: list[dict],
+        temperature: float = None,
+        max_tokens: int = None,
+    ) -> str:
+        """Generate a response using the ollama chat API with a message history."""
+        if temperature is None:
+            temperature = self.default_temperature
+        if max_tokens is None:
+            max_tokens = self.default_max_tokens
+
+        try:
+            response = self.client.chat(
+                model=self.model_name,
+                messages=messages,
+                options={
+                    "temperature": temperature,
+                    "num_predict": max_tokens,
+                },
+            )
+            return response.message.content
+
+        except Exception as e:
+            error_msg = f"Error generating chat response: {str(e)}"
             print(error_msg)
             return f"Entschuldigung, es gab einen Fehler bei der Generierung der Antwort: {str(e)}"
 
