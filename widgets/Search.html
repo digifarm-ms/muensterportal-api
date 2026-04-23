@@ -1,0 +1,72 @@
+<div id="api-search-widget">
+  <form id="api-search-form">
+    <input type="text" id="api-search-input" placeholder="Suche…" />
+    <button type="submit">Suchen</button>
+  </form>
+  <div id="api-search-results"></div>
+</div>
+
+<style>
+#api-search-widget {
+  max-width: 600px;
+}
+#api-search-form {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+#api-search-input {
+  flex: 1;
+  padding: 8px;
+  font-size: 14px;
+  border: 1px solid #a2a9b1;
+  border-radius: 2px;
+}
+#api-search-form button {
+  padding: 8px 16px;
+  font-size: 14px;
+  cursor: pointer;
+}
+#api-search-results {
+  white-space: pre-wrap;
+  font-family: monospace;
+  font-size: 13px;
+  background: #f8f9fa;
+  padding: 12px;
+  border: 1px solid #eaecf0;
+  border-radius: 2px;
+  display: none;
+}
+</style>
+
+<script>
+(function() {
+  var form = document.getElementById('api-search-form');
+  var input = document.getElementById('api-search-input');
+  var results = document.getElementById('api-search-results');
+  var apiHost = 'api.' + location.hostname.split('.').slice(1).join('.');
+
+  form.addEventListener('submit', function(e) {
+    e.preventDefault();
+    var query = input.value.trim();
+    if (!query) return;
+
+    results.style.display = 'block';
+    results.textContent = 'Laden…';
+
+    var url = location.protocol + '//' + apiHost + '/search?query=' + encodeURIComponent(query);
+
+    fetch(url)
+      .then(function(res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.json();
+      })
+      .then(function(data) {
+        results.textContent = JSON.stringify(data, null, 2);
+      })
+      .catch(function(err) {
+        results.textContent = 'Fehler: ' + err.message;
+      });
+  });
+})();
+</script>

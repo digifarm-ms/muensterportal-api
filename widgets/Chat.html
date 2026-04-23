@@ -1,0 +1,183 @@
+<div id="m4u-chat-widget">
+  <div id="m4u-chat-messages"></div>
+  <form id="m4u-chat-form">
+    <input type="text" id="m4u-chat-input" placeholder="Stelle eine Frage über Münster…" />
+    <button type="submit" id="m4u-chat-send">Senden</button>
+  </form>
+  <div id="m4u-chat-footer">
+    <span id="m4u-chat-status"></span>
+    <button type="button" id="m4u-chat-reset">Neue Unterhaltung</button>
+  </div>
+</div>
+
+<style>
+#m4u-chat-widget {
+  max-width: 600px;
+  font-family: sans-serif;
+  font-size: 14px;
+}
+#m4u-chat-messages {
+  min-height: 60px;
+  max-height: 400px;
+  overflow-y: auto;
+  border: 1px solid #a2a9b1;
+  border-radius: 2px;
+  padding: 8px;
+  margin-bottom: 8px;
+  background: #f8f9fa;
+}
+.m4u-msg {
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  border-radius: 4px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+.m4u-msg-user {
+  background: #d5e8f7;
+  text-align: right;
+}
+.m4u-msg-assistant {
+  background: #fff;
+  border: 1px solid #eaecf0;
+}
+.m4u-msg-label {
+  font-size: 11px;
+  color: #72777d;
+  margin-bottom: 2px;
+}
+#m4u-chat-form {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+#m4u-chat-input {
+  flex: 1;
+  padding: 8px;
+  font-size: 14px;
+  border: 1px solid #a2a9b1;
+  border-radius: 2px;
+}
+#m4u-chat-send {
+  padding: 8px 16px;
+  font-size: 14px;
+  cursor: pointer;
+}
+#m4u-chat-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+#m4u-chat-status {
+  font-size: 12px;
+  color: #72777d;
+}
+#m4u-chat-reset {
+  font-size: 12px;
+  cursor: pointer;
+  background: none;
+  border: 1px solid #a2a9b1;
+  border-radius: 2px;
+  padding: 4px 10px;
+}
+</style>
+
+<script>
+(function() {
+  var form = document.getElementById('m4u-chat-form');
+  var input = document.getElementById('m4u-chat-input');
+  var messagesEl = document.getElementById('m4u-chat-messages');
+  var statusEl = document.getElementById('m4u-chat-status');
+  var resetBtn = document.getElementById('m4u-chat-reset');
+  var sendBtn = document.getElementById('m4u-chat-send');
+  var apiHost = 'api.' + location.hostname.split('.').slice(1).join('.');
+  var apiUrl = location.protocol + '//' + apiHost;
+
+  var conversationId = null;
+
+  function renderHistory(history) {
+    messagesEl.innerHTML = '';
+    for (var i = 0; i < history.length; i++) {
+      var msg = history[i];
+      var div = document.createElement('div');
+      div.className = 'm4u-msg m4u-msg-' + msg.role;
+
+      var label = document.createElement('div');
+      label.className = 'm4u-msg-label';
+      label.textContent = msg.role === 'user' ? 'Du' : 'Assistent';
+      div.appendChild(label);
+
+      var content = document.createElement('div');
+      content.textContent = msg.content;
+      div.appendChild(content);
+
+      messagesEl.appendChild(div);
+    }
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  function setStatus(text) {
+    statusEl.textContent = text;
+  }
+
+  function setLoading(loading) {
+    sendBtn.disabled = loading;
+    input.disabled = loading;
+    if (loading) {
+      setStatus('Generiere Antwort…');
+    }
+  }
+
+  function resetChat() {
+    conversationId = null;
+    messagesEl.innerHTML = '';
+    setStatus('');
+    input.value = '';
+    input.focus();
+  }
+
+  form.addEventListener('submit', function(e) {
+    e.preventDefault();
+    var message = input.value.trim();
+    if (!message) return;
+
+    input.value = '';
+    setLoading(true);
+
+    fetch(apiUrl + '/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: message,
+        conversation_id: conversationId
+      })
+    })
+    .then(function(res) {
+      if (!res.ok) {
+        return res.json().then(function(data) {
+          throw new Error(data.detail || 'HTTP ' + res.status);
+        });
+      }
+      return res.json();
+    })
+    .then(function(data) {
+      conversationId = data.conversation_id;
+      renderHistory(data.history);
+      var remaining = data.remaining_followups;
+      if (remaining > 0) {
+        setStatus('Noch ' + remaining + ' Rückfrage' + (remaining > 1 ? 'n' : '') + ' möglich');
+      } else {
+        setStatus('Keine weiteren Rückfragen möglich');
+        sendBtn.disabled = true;
+        input.disabled = true;
+      }
+    })
+    .catch(function(err) {
+      setLoading(false);
+      setStatus('Fehler: ' + err.message);
+    });
+  });
+
+  resetBtn.addEventListener('click', resetChat);
+})();
+</script>
