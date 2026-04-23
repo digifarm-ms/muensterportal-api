@@ -3,7 +3,6 @@
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, List
 
-import numpy as np
 from ddgs import DDGS
 from sentence_transformers import util
 
@@ -49,7 +48,8 @@ class DuckDuckGoSearcher:
         """
         Build search query for Münster-related content.
 
-        Adds "Münster" to query if not present to improve relevance.
+        Adds "Münster" to query if not present and appends site: restrictions
+        to limit results to configured domains.
 
         Args:
             query: User query
@@ -57,23 +57,20 @@ class DuckDuckGoSearcher:
         Returns:
             Query optimized for Münster-related results
         """
-        # Add Münster to query if not already present for better relevance
-        if "münster" not in query.lower() and "muenster" not in query.lower():
-            return f"{query} Münster"
-        return query
+        parts = [query]
 
-    def _matches_site_filter(self, url: str) -> bool:
-        """Check if URL matches any of the site filters."""
-        if not self.site_filters:
-            return True
-        return any(site in url for site in self.site_filters)
+        if "münster" not in query.lower() and "muenster" not in query.lower():
+            parts.append("Münster")
+
+        if self.site_filters:
+            site_clause = " OR ".join(f"site:{site}" for site in self.site_filters)
+            parts.append(f"({site_clause})")
+
+        return " ".join(parts)
 
     def search(self, query: str) -> List[WebSearchResult]:
         """
-        Search using DuckDuckGo with optional domain filtering.
-
-        Note: DuckDuckGo API doesn't support site: operator reliably,
-        so we filter results by domain after fetching.
+        Search using DuckDuckGo with site: operator for domain filtering.
 
         Args:
             query: User query
@@ -84,15 +81,11 @@ class DuckDuckGoSearcher:
         search_query = self._build_query(query)
 
         try:
-            # Fetch more results than needed to allow for filtering
-            fetch_count = self.max_results * 3 if self.site_filters else self.max_results
-
             with DDGS() as ddgs:
-                # Note: region filter can cause unreliable results, so we omit it
                 raw_results = list(ddgs.text(
                     search_query,
                     safesearch="moderate",
-                    max_results=fetch_count,
+                    max_results=self.max_results,
                 ))
 
         except Exception as e:
@@ -100,32 +93,19 @@ class DuckDuckGoSearcher:
             return []
 
         if not raw_results:
-            # DuckDuckGo may return empty results due to rate limiting
             print("Web search returned no results (possible rate limiting)")
             return []
 
-        # Parse and filter results
         results = []
-        rank = 0
-        for item in raw_results:
-            url = item.get("href", "")
-
-            # Apply site filter if configured
-            if self.site_filters and not self._matches_site_filter(url):
-                continue
-
-            rank += 1
+        for rank, item in enumerate(raw_results, start=1):
             results.append(
                 WebSearchResult(
                     title=item.get("title", ""),
-                    url=url,
+                    url=item.get("href", ""),
                     description=item.get("body", ""),
                     rank=rank,
                 )
             )
-
-            if rank >= self.max_results:
-                break
 
         return results
 
