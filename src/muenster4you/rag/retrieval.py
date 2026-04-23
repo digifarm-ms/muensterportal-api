@@ -55,7 +55,7 @@ class WikiRetriever:
             self.embedder = embedder
 
         # Convert to torch tensor for sentence-transformers util
-        self.doc_embeddings_tensor = torch.from_numpy(self.doc_embeddings)
+        self.doc_embeddings_tensor = torch.from_numpy(self.doc_embeddings).float()
 
         print(f"Retriever ready with {len(self.df)} documents")
 
@@ -84,7 +84,7 @@ class WikiRetriever:
 
         # Embed the query
         query_embedding = self.embedder.embed_query(query)
-        query_embedding_tensor = torch.from_numpy(query_embedding)
+        query_embedding_tensor = torch.from_numpy(query_embedding).float()
 
         # Compute cosine similarity using sentence-transformers util
         similarities = util.cos_sim(query_embedding_tensor, self.doc_embeddings_tensor)[0]
