@@ -1,37 +1,38 @@
 """FastAPI application with RAG-powered search and query endpoints."""
 
 from contextlib import asynccontextmanager
-from typing import Optional
+from functools import lru_cache
+from typing import Annotated, Optional
 
-from fastapi import FastAPI, Query
-from pydantic import BaseModel
+from fastapi import Depends, FastAPI, Query
+from pydantic import BaseModel, Field
 
-from muenster4you.rag.config import config
 from muenster4you.rag.generation import RAGGenerator
-from muenster4you.rag.retrieval import WikiRetriever
-
-# Lazy-initialized singletons
-_retriever: WikiRetriever | None = None
-_generator: RAGGenerator | None = None
+from muenster4you.rag.retrieval import RetrievalResult, WikiRetriever
 
 
+# --- Dependencies ---
+
+
+@lru_cache
 def get_retriever() -> WikiRetriever:
-    global _retriever
-    if _retriever is None:
-        _retriever = WikiRetriever()
-    return _retriever
+    return WikiRetriever()
 
 
+@lru_cache
 def get_generator() -> RAGGenerator:
-    global _generator
-    if _generator is None:
-        _generator = RAGGenerator()
-    return _generator
+    return RAGGenerator()
+
+
+RetrieverDep = Annotated[WikiRetriever, Depends(get_retriever)]
+GeneratorDep = Annotated[RAGGenerator, Depends(get_generator)]
+
+
+# --- App ---
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Warm up on startup
     get_retriever()
     get_generator()
     yield
@@ -40,10 +41,13 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Muenster4You API", version="0.1.0", lifespan=lifespan)
 
 
+# --- Models ---
+
+
 class QueryRequest(BaseModel):
     question: str
-    top_k: int = config.default_top_k
-    temperature: float = config.default_temperature
+    top_k: int = Field(default=5, ge=1, le=20)
+    temperature: float = Field(default=0.7, ge=0.0, le=1.0)
 
 
 class SearchResultItem(BaseModel):
@@ -54,11 +58,31 @@ class SearchResultItem(BaseModel):
     page_len: int
     source: str
 
+    @classmethod
+    def from_retrieval_result(cls, r: RetrievalResult) -> "SearchResultItem":
+        return cls(
+            page_id=r.page_id,
+            page_title=r.page_title,
+            content_text=r.content_text,
+            similarity_score=r.similarity_score,
+            page_len=r.page_len,
+            source=r.source,
+        )
+
+
+class SearchResponse(BaseModel):
+    query: str | None
+    results: list[SearchResultItem] = []
+    message: str | None = None
+
 
 class QueryResponse(BaseModel):
     question: str
     answer: str
     sources: list[SearchResultItem]
+
+
+# --- Endpoints ---
 
 
 @app.get("/")
@@ -72,53 +96,34 @@ async def root():
 
 @app.get("/search")
 async def search(
+    retriever: RetrieverDep,
     q: Optional[str] = Query(None, description="Search query string"),
-    top_k: int = Query(config.default_top_k, ge=1, le=20),
-):
+    top_k: int = Query(5, ge=1, le=20),
+) -> SearchResponse:
     if not q:
-        return {"message": "Please provide a search query", "query": None}
+        return SearchResponse(query=None, message="Please provide a search query")
 
-    retriever = get_retriever()
     results = retriever.retrieve(q, top_k=top_k)
 
-    return {
-        "query": q,
-        "results": [
-            SearchResultItem(
-                page_id=r.page_id,
-                page_title=r.page_title,
-                content_text=r.content_text,
-                similarity_score=r.similarity_score,
-                page_len=r.page_len,
-                source=r.source,
-            )
-            for r in results
-        ],
-    }
+    return SearchResponse(
+        query=q,
+        results=[SearchResultItem.from_retrieval_result(r) for r in results],
+    )
 
 
 @app.post("/query")
-async def query(req: QueryRequest) -> QueryResponse:
-    retriever = get_retriever()
-    generator = get_generator()
-
+async def query(
+    retriever: RetrieverDep,
+    generator: GeneratorDep,
+    req: QueryRequest,
+) -> QueryResponse:
     results = retriever.retrieve(req.question, top_k=req.top_k)
     answer = generator.generate(req.question, results, temperature=req.temperature)
 
     return QueryResponse(
         question=req.question,
         answer=answer,
-        sources=[
-            SearchResultItem(
-                page_id=r.page_id,
-                page_title=r.page_title,
-                content_text=r.content_text,
-                similarity_score=r.similarity_score,
-                page_len=r.page_len,
-                source=r.source,
-            )
-            for r in results
-        ],
+        sources=[SearchResultItem.from_retrieval_result(r) for r in results],
     )
 
 
