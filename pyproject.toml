@@ -3,9 +3,7 @@ name = "muenster4you"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-authors = [
-    { name = "Alexander Milden", email = "milden@westphalia-datalab.com" },
-]
+authors = [{ name = "Alexander Milden", email = "Alexander@Milden.net" }]
 requires-python = ">=3.13"
 dependencies = [
     "fastapi>=0.104.0",
