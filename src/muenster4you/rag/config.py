@@ -37,6 +37,10 @@ class RAGConfig(BaseSettings):
     default_temperature: float = 0.7
     default_max_tokens: int = 2048
 
+    # Chat session parameters
+    chat_session_ttl: int = 1800  # seconds of inactivity before session expiry
+    chat_max_followups: int = 3  # max follow-up questions after the initial question
+
     # Performance
     embedding_batch_size: int = 32
     use_mps: bool = True  # Apple Silicon acceleration

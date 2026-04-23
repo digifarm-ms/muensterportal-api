@@ -4,11 +4,12 @@ from contextlib import asynccontextmanager
 from functools import lru_cache
 from typing import Annotated, Optional
 
-from fastapi import Depends, FastAPI, Query
+from fastapi import Depends, FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from muenster4you.rag.generation import RAGGenerator
 from muenster4you.rag.retrieval import RetrievalResult, WikiRetriever
+from muenster4you.rag.sessions import ChatSessionManager
 
 
 # --- Dependencies ---
@@ -24,8 +25,14 @@ def get_generator() -> RAGGenerator:
     return RAGGenerator()
 
 
+@lru_cache
+def get_session_manager() -> ChatSessionManager:
+    return ChatSessionManager()
+
+
 RetrieverDep = Annotated[WikiRetriever, Depends(get_retriever)]
 GeneratorDep = Annotated[RAGGenerator, Depends(get_generator)]
+SessionManagerDep = Annotated[ChatSessionManager, Depends(get_session_manager)]
 
 
 # --- App ---
@@ -35,6 +42,7 @@ GeneratorDep = Annotated[RAGGenerator, Depends(get_generator)]
 async def lifespan(app: FastAPI):
     get_retriever()
     get_generator()
+    get_session_manager()
     yield
 
 
@@ -82,6 +90,26 @@ class QueryResponse(BaseModel):
     sources: list[SearchResultItem]
 
 
+class ChatRequest(BaseModel):
+    message: str
+    conversation_id: str | None = None
+    top_k: int = Field(default=5, ge=1, le=20)
+    temperature: float = Field(default=0.7, ge=0.0, le=1.0)
+
+
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
+
+class ChatResponse(BaseModel):
+    conversation_id: str
+    answer: str
+    sources: list[SearchResultItem]
+    history: list[ChatMessage]
+    remaining_followups: int
+
+
 # --- Endpoints ---
 
 
@@ -124,6 +152,60 @@ async def query(
         question=req.question,
         answer=answer,
         sources=[SearchResultItem.from_retrieval_result(r) for r in results],
+    )
+
+
+@app.post("/chat")
+async def chat(
+    retriever: RetrieverDep,
+    generator: GeneratorDep,
+    session_manager: SessionManagerDep,
+    req: ChatRequest,
+) -> ChatResponse:
+    session_manager.cleanup_expired()
+
+    is_new = True
+    session = None
+    if req.conversation_id:
+        session = session_manager.get_session(req.conversation_id)
+        if session is not None:
+            is_new = False
+
+    if is_new:
+        # First turn: run RAG retrieval and create session
+        results = retriever.retrieve(req.message, top_k=req.top_k)
+        conversation_id = session_manager.create_session(sources=results)
+        system_msg = generator.build_system_message(results)
+        session_manager.set_system_message(conversation_id, system_msg["content"])
+    else:
+        # Follow-up turn: reuse stored sources, no new retrieval
+        assert session is not None and req.conversation_id is not None
+        conversation_id = req.conversation_id
+        if not session_manager.can_accept_message(conversation_id):
+            raise HTTPException(
+                status_code=400,
+                detail="Maximale Anzahl an Rückfragen erreicht. Bitte starte eine neue Unterhaltung.",
+            )
+        results = session.sources
+
+    session_manager.add_user_message(conversation_id, req.message)
+    messages = session_manager.get_messages(conversation_id)
+    answer = generator.chat(messages, temperature=req.temperature)
+    session_manager.add_assistant_message(conversation_id, answer)
+
+    # Build history (user/assistant messages only, exclude system)
+    history = [
+        ChatMessage(role=m["role"], content=m["content"])
+        for m in session_manager.get_messages(conversation_id)
+        if m["role"] != "system"
+    ]
+
+    return ChatResponse(
+        conversation_id=conversation_id,
+        answer=answer,
+        sources=[SearchResultItem.from_retrieval_result(r) for r in results],
+        history=history,
+        remaining_followups=session_manager.remaining_followups(conversation_id),
     )
 
 
