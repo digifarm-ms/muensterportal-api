@@ -274,5 +274,14 @@ def main():
                 st.rerun()
 
 
+def run() -> None:
+    """Launch the Streamlit app server programmatically."""
+    from pathlib import Path
+
+    from streamlit.web.bootstrap import run as st_run
+
+    st_run(str(Path(__file__)), is_hello=False, args=[], flag_options={})
+
+
 if __name__ == "__main__":
     main()
