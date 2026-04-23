@@ -23,11 +23,13 @@ dependencies = [
     "mistralai>=1.12.4",
 ]
 
-[project.optional-dependencies]
+[dependency-groups]
 test = ["pytest>=7.4.0", "pytest-asyncio>=0.21.0"]
+dev = ["ipykernel>=7.2.0"]
 
 [project.scripts]
 muenster4you = "muenster4you.api:main"
+muenster4you-app = "muenster4you.app:run"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -39,9 +41,6 @@ addopts = "-v"
 [build-system]
 requires = ["uv_build>=0.9.3,<0.10.0"]
 build-backend = "uv_build"
-
-[dependency-groups]
-dev = ["ipykernel>=7.2.0"]
 
 [tool.uv]
 default-groups = "all"
