@@ -2,7 +2,7 @@
 
 from contextlib import asynccontextmanager
 from functools import lru_cache
-from typing import Annotated, Optional
+from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -125,11 +125,14 @@ async def root():
 @app.get("/search")
 async def search(
     retriever: RetrieverDep,
-    q: Optional[str] = Query(None, description="Search query string"),
+    q: str = Query(..., description="Search query string"),
     top_k: int = Query(5, ge=1, le=20),
 ) -> SearchResponse:
     if not q:
-        return SearchResponse(query=None, message="Please provide a search query")
+        raise HTTPException(
+            status_code=400,
+            detail="Query parameter 'q' is required and cannot be empty.",
+        )
 
     results = retriever.retrieve(q, top_k=top_k)
 
