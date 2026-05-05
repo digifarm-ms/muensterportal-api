@@ -1,0 +1,37 @@
+name: Weekly Wiki Ingestion
+
+on:
+  schedule:
+    - cron: '0 3 * * 0'  # Every Sunday at 03:00 UTC
+  workflow_dispatch:
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run ingestion over SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          command_timeout: 60m
+          script: |
+            set -euo pipefail
+            export PATH="$HOME/.local/bin:$PATH"
+
+            REPO_DIR="$HOME/muensterportal-api"
+            LANCE_DIR="$HOME/lancedb"
+            SQLITE_SRC="/home/tomwiki/mediawiki-1.44.0/cache/sqlite/my_wiki.sqlite"
+            SQLITE_TMP="$(mktemp -t my_wiki.XXXXXX.sqlite)"
+            trap 'rm -f "$SQLITE_TMP"' EXIT
+
+            cd "$REPO_DIR"
+            uv sync --frozen
+
+            cp "$SQLITE_SRC" "$SQLITE_TMP"
+
+            mkdir -p "$LANCE_DIR"
+            uv run python -m muenster4you.ingest \
+              --sqlite "$SQLITE_TMP" \
+              --lance "$LANCE_DIR"
