@@ -1,109 +1,51 @@
 """MediaWiki SQLite database access layer."""
 
-import sqlite3
-from typing import Dict, List, Optional
+from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
+from sqlite3 import Row, connect
+from typing import Iterator, Self
 
 
-class MediaWikiDB:
-    def __init__(self, db_path: str):
-        self.conn = sqlite3.connect(db_path)
-        self.conn.row_factory = sqlite3.Row  # Access columns by name
+@dataclass
+class RawMediaWikiPage:
+    id: int
+    namespace: int
+    title: str
+    length: int
 
-    def get_page_content(self, page_title: str, namespace: int = 0) -> Optional[Dict]:
-        """
-        Get the current content of a page by following the complete chain:
-        page -> revision -> slots -> content -> text
-        """
-        query = """
-        SELECT
-            p.page_id,
-            p.page_namespace,
-            p.page_title,
-            p.page_latest as current_rev_id,
-            p.page_len,
-            p.page_is_redirect,
-            r.rev_id,
-            r.rev_timestamp,
-            r.rev_actor,
-            a.actor_name as editor,
-            c.comment_text as edit_summary,
-            s.slot_role_id,
-            sr.role_name as slot_role,
-            s.slot_content_id,
-            s.slot_origin,
-            co.content_size,
-            co.content_sha1,
-            cm.model_name as content_model,
-            co.content_address,
-            t.old_text as content,
-            t.old_flags as storage_flags
-        FROM page p
-        JOIN revision r ON p.page_latest = r.rev_id
-        JOIN actor a ON r.rev_actor = a.actor_id
-        LEFT JOIN comment c ON r.rev_comment_id = c.comment_id
-        JOIN slots s ON r.rev_id = s.slot_revision_id
-        JOIN slot_roles sr ON s.slot_role_id = sr.role_id
-        JOIN content co ON s.slot_content_id = co.content_id
-        JOIN content_models cm ON co.content_model = cm.model_id
-        JOIN text t ON CAST(substr(co.content_address, 4) AS INTEGER) = t.old_id
-        WHERE p.page_title = ? AND p.page_namespace = ?
-        """
 
-        cursor = self.conn.execute(query, (page_title, namespace))
-        row = cursor.fetchone()
+@dataclass
+class MediaWikiPage:
+    id: int
+    namespace: int
+    title: str
+    content: str
+    rev_id: int
+    rev_timestamp: datetime
+    rev_actor: str
 
-        if not row:
-            return None
+    @classmethod
+    def from_db_row(cls, row: Row) -> Self:
+        id_, namespace, title, content, rev_id, rev_timestamp_str, rev_actor = row
+        rev_timestamp = datetime.strptime(rev_timestamp_str, "%Y%m%d%H%M%S")
+        return cls(
+            id=id_,
+            namespace=namespace,
+            title=title,
+            content=content,
+            rev_id=rev_id,
+            rev_timestamp=rev_timestamp,
+            rev_actor=rev_actor,
+        )
 
-        return dict(row)
 
-    def get_page_revisions(self, page_title: str, namespace: int = 0) -> List[Dict]:
-        """Get all revisions for a page"""
-        query = """
-        SELECT
-            r.rev_id,
-            r.rev_timestamp,
-            a.actor_name as editor,
-            c.comment_text as edit_summary,
-            co.content_size,
-            s.slot_origin,
-            CASE
-                WHEN s.slot_origin = r.rev_id THEN 1
-                ELSE 0
-            END as is_new_content
-        FROM page p
-        JOIN revision r ON p.page_id = r.rev_page
-        JOIN actor a ON r.rev_actor = a.actor_id
-        LEFT JOIN comment c ON r.rev_comment_id = c.comment_id
-        JOIN slots s ON r.rev_id = s.slot_revision_id
-        JOIN content co ON s.slot_content_id = co.content_id
-        WHERE p.page_title = ? AND p.page_namespace = ?
-        ORDER BY r.rev_timestamp DESC
-        """
+class SQLiteMediaWiki:
+    def __init__(self, db_path: Path) -> None:
+        self.conn = connect(db_path)
 
-        cursor = self.conn.execute(query, (page_title, namespace))
-        return [dict(row) for row in cursor.fetchall()]
-
-    def list_all_pages(self, namespace: int = 0, limit: int = 50) -> List[Dict]:
-        """List all pages in a namespace"""
-        query = """
-        SELECT
-            page_id,
-            page_namespace,
-            page_title,
-            page_len,
-            page_is_redirect
-        FROM page
-        WHERE page_namespace = ?
-        ORDER BY page_title
-        LIMIT ?
-        """
-
-        cursor = self.conn.execute(query, (namespace, limit))
-        return [dict(row) for row in cursor.fetchall()]
-
-    def search_pages(self, search_term: str) -> List[Dict]:
-        """Search for pages by title"""
+    def get_all_pages(self, namespace: int = 0) -> Iterator[RawMediaWikiPage]:
+        """Get all pages in a namespace"""
         query = """
         SELECT
             page_id,
@@ -111,20 +53,39 @@ class MediaWikiDB:
             page_title,
             page_len
         FROM page
-        WHERE page_title LIKE ?
-        ORDER BY page_title
-        LIMIT 20
+        WHERE page_namespace = ?
         """
+        with self.conn as conn:
+            cur = conn.cursor()
+            cur.row_factory = lambda cursor, row: RawMediaWikiPage(*row)
+            yield from cur.execute(query, (namespace,))
 
-        cursor = self.conn.execute(query, (f"%{search_term}%",))
-        return [dict(row) for row in cursor.fetchall()]
-
-    def close(self):
-        self.conn.close()
-
-
-def format_timestamp(timestamp: str) -> str:
-    """Format MediaWiki timestamp (YYYYMMDDHHmmSS) to readable format"""
-    if not timestamp or len(timestamp) < 14:
-        return timestamp
-    return f"{timestamp[0:4]}-{timestamp[4:6]}-{timestamp[6:8]} {timestamp[8:10]}:{timestamp[10:12]}:{timestamp[12:14]}"
+    def get_page_content_by_id(
+        self, page_id: int, namespace: int = 0
+    ) -> MediaWikiPage | None:
+        query = """
+        SELECT
+            p.page_id AS id,
+            p.page_namespace AS namespace,
+            p.page_title AS title,
+            t.old_text AS content,
+            r.rev_id,
+            r.rev_timestamp,
+            a.actor_name AS rev_actor
+        FROM page p
+        JOIN revision r ON p.page_id = r.rev_page
+        JOIN actor a ON r.rev_actor = a.actor_id
+        JOIN slots s ON r.rev_id = s.slot_revision_id
+        JOIN content c ON s.slot_content_id = c.content_id
+        JOIN text t ON CAST(substr(c.content_address, 4) AS INTEGER) = t.old_id
+        WHERE (
+            p.page_id = ?
+            AND p.page_namespace = ?
+            AND s.slot_role_id = 1
+            AND c.content_model = 1
+        )
+        """
+        with self.conn as conn:
+            cur = conn.cursor()
+            cur.row_factory = lambda cursor, row: MediaWikiPage.from_db_row(row)
+            return cur.execute(query, (page_id, namespace)).fetchone()
