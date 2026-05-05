@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 authors = [{ name = "Alexander Milden", email = "Alexander@Milden.net" }]
-requires-python = ">=3.13,<3.13.8"
+requires-python = ">=3.13"
 dependencies = [
     "fastapi>=0.104.0",
     "sentence-transformers>=5.2.0",
