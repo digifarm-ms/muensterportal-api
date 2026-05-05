@@ -1,19 +1,17 @@
-from collections.abc import Sequence
-from pathlib import Path
-from typing import TypedDict
 from datetime import datetime
+from pathlib import Path
 
-from lancedb import connect
-from lancedb.embeddings import get_registry
 from lancedb.pydantic import LanceModel, Vector
 
-from muenster4you.rag.retrieval import RetrievalResult
-
+from lancedb import connect
+from muenster4you.types import WikiPage
 
 WIKIPAGE_TABLE_NAME = "mediawiki_pages"
+EMBEDDING_MODEL_NAME = "jinaai/jina-embeddings-v5-text-small-retrieval"
+EMBEDDING_DIM = 1024
 
 
-class WikiPageData(TypedDict):
+class LanceDBWikiPage(LanceModel):
     id: int
     namespace: int
     title: str
@@ -21,24 +19,7 @@ class WikiPageData(TypedDict):
     rev_id: int
     rev_timestamp: datetime
     rev_actor: str
-
-
-model = (
-    get_registry()
-    .get("sentence-transformers")
-    .create(name="jinaai/jina-embeddings-v5-text-small-retrieval")
-)
-
-
-class LanceDBWikiPage(LanceModel):
-    id: int
-    namespace: int
-    title: str
-    content: str = model.SourceField()
-    rev_id: int
-    rev_timestamp: datetime
-    rev_actor: str
-    embedding: Vector(model.ndims()) = model.VectorField()
+    embedding: Vector(EMBEDDING_DIM)
 
 
 class LanceDBMediaWiki:
@@ -48,7 +29,7 @@ class LanceDBMediaWiki:
             WIKIPAGE_TABLE_NAME, schema=LanceDBWikiPage.to_arrow_schema(), exist_ok=True
         )
 
-    def upsert_pages(self, pages: Sequence[WikiPageData]) -> None:
+    def upsert_pages(self, pages: list[WikiPage]) -> None:
         if len(pages) == 0:
             return
         (
