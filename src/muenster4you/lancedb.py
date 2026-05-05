@@ -10,6 +10,9 @@ from lancedb.pydantic import LanceModel, Vector
 from muenster4you.rag.retrieval import RetrievalResult
 
 
+WIKIPAGE_TABLE_NAME = "mediawiki_pages"
+
+
 class WikiPageData(TypedDict):
     id: int
     namespace: int
@@ -42,7 +45,7 @@ class LanceDBMediaWiki:
     def __init__(self, path: Path) -> None:
         self.db = connect(path)
         self.table = self.db.create_table(
-            "mediawiki_pages", schema=LanceDBWikiPage.to_arrow_schema(), exist_ok=True
+            WIKIPAGE_TABLE_NAME, schema=LanceDBWikiPage.to_arrow_schema(), exist_ok=True
         )
 
     def upsert_pages(self, pages: Sequence[WikiPageData]) -> None:
