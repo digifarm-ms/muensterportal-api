@@ -3,7 +3,7 @@
 
 import sys
 
-from muenster4you.db.mediawiki import MediaWikiDB, format_timestamp
+from muenster4you.mediawiki import MediaWikiDB, format_timestamp
 
 
 def main():
