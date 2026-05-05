@@ -1,14 +1,53 @@
 """Ingest MediaWiki pages from SQLite into LanceDB."""
 
 import argparse
+import re
 from collections.abc import Iterable
 from itertools import batched
 from pathlib import Path
 
+import mwparserfromhell
 from tqdm import tqdm
 
 from muenster4you.lancedb import LanceDBMediaWiki, WikiPageData
 from muenster4you.mediawiki import SQLiteMediaWiki
+
+
+def clean_wikitext(content: str) -> str:
+    """Clean MediaWiki markup to extract plain text suitable for embedding."""
+    if not content:
+        return ""
+
+    try:
+        wikicode = mwparserfromhell.parse(content)
+
+        for template in wikicode.filter_templates():
+            try:
+                wikicode.remove(template)
+            except ValueError:
+                pass
+
+        for tag in wikicode.filter_tags():
+            try:
+                wikicode.remove(tag)
+            except ValueError:
+                pass
+
+        text = wikicode.strip_code()
+
+    except Exception:
+        text = content
+
+    text = re.sub(r"<!--.*?-->", "", text, flags=re.DOTALL)
+    text = re.sub(r"<display_map[^>]*>.*?</display_map>", "", text, flags=re.DOTALL)
+    text = re.sub(r"<widget[^>]*>.*?</widget>", "", text, flags=re.DOTALL)
+    text = re.sub(r"<[^>]+>", "", text)
+
+    text = re.sub(r"\n\s*\n+", "\n\n", text)
+    text = re.sub(r"[ \t]+", " ", text)
+    text = text.strip()
+
+    return text
 
 
 def load_pages_from_media_wiki(
@@ -22,7 +61,7 @@ def load_pages_from_media_wiki(
             "id": page.id,
             "namespace": page.namespace,
             "title": page.title,
-            "content": page.content,
+            "content": clean_wikitext(page.content),
             "rev_id": page.rev_id,
             "rev_timestamp": page.rev_timestamp,
             "rev_actor": page.rev_actor,
