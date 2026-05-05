@@ -18,6 +18,7 @@ dependencies = [
     "pydantic-settings>=2.1.0",
     "rich>=13.7.0",
     "ddgs>=8.0.0",
+    "lancedb>=0.30.2",
 ]
 
 [dependency-groups]
