@@ -188,6 +188,18 @@
     return str.substring(0, len).replace(/\s+\S*$/, '') + '…';
   }
 
+  function deriveTitle(r) {
+    if (!r.url) return 'Ohne Titel';
+    if (r.source === 'wiki') {
+      try {
+        return decodeURIComponent(r.url.split('/').pop()).replace(/_/g, ' ');
+      } catch (e) {
+        return r.url;
+      }
+    }
+    return r.url;
+  }
+
   function renderResults(data) {
     if (!data.results || data.results.length === 0) {
       results.innerHTML = '<div class="search-status">Keine Ergebnisse gefunden.</div>';
@@ -200,11 +212,11 @@
           + '<div class="search-result-snippet">' + escapeHtml(r) + '</div>'
           + '</div>';
       } else {
-        var pct = Math.round((r.similarity_score || 0) * 100);
-        var wikiUrl = '/wiki/' + encodeURIComponent((r.page_title || '').replace(/ /g, '_'));
+        var pct = Math.round((r.score || 0) * 100);
+        var title = deriveTitle(r);
         html += '<div class="search-result-card">'
-          + '<h4><a href="' + wikiUrl + '">' + escapeHtml(r.page_title || 'Ohne Titel') + '</a></h4>'
-          + '<div class="search-result-snippet">' + escapeHtml(truncate(r.content_text || '', 220)) + '</div>'
+          + '<h4><a href="' + escapeHtml(r.url || '#') + '">' + escapeHtml(title) + '</a></h4>'
+          + '<div class="search-result-snippet">' + escapeHtml(truncate(r.content || '', 220)) + '</div>'
           + '<div class="search-result-meta">'
           + '<span>Relevanz: <span class="search-score-bar"><span class="search-score-fill" style="width:' + pct + '%"></span></span> ' + pct + '%</span>'
           + (r.source ? '<span>Quelle: ' + escapeHtml(r.source) + '</span>' : '')
