@@ -45,3 +45,8 @@ build-backend = "uv_build"
 
 [tool.uv]
 default-groups = "all"
+
+[tool.pyright]
+useLibraryCodeForTypes = true
+venvPath = "."
+venv = ".venv"
