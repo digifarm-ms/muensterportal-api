@@ -30,7 +30,7 @@ class LanceDBRetriever:
                 content=r["content"],
                 score=1.0 - r["_distance"],
                 source=RetrievalSource.WIKI,
-                url=f"/wiki/{quote(r['page_title'].replace(' ', '_'))}",
+                url=f"/wiki/{quote(r['title'].replace(' ', '_'))}",
             )
             for r in results
         ]
