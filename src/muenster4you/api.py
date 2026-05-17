@@ -42,22 +42,10 @@ app = FastAPI(title="Muenster4You API", version="0.1.0")
 # --- Models ---
 
 
-class QueryRequest(BaseModel):
-    question: str
-    top_k: int = Field(default=5, ge=1, le=20)
-    temperature: float = Field(default=0.7, ge=0.0, le=1.0)
-
-
 class SearchResponse(BaseModel):
     query: str | None
     results: list[RetrievalResult] = []
     message: str | None = None
-
-
-class QueryResponse(BaseModel):
-    question: str
-    answer: str
-    sources: list[RetrievalResult]
 
 
 class ChatRequest(BaseModel):
@@ -106,74 +94,58 @@ async def search(
     )
 
 
-# @app.post("/query")
-# async def query(
-#     retriever: RetrieverDep,
-#     generator: GeneratorDep,
-#     req: QueryRequest,
-# ) -> QueryResponse:
-#     results = retriever.search(req.question, limit=req.top_k)
-#     answer = generator.generate(req.question, results, temperature=req.temperature)
+@app.post("/chat")
+async def chat(
+    retriever: RetrieverDep,
+    generator: GeneratorDep,
+    session_manager: SessionManagerDep,
+    req: ChatRequest,
+) -> ChatResponse:
+    session_manager.cleanup_expired()
 
-#     return QueryResponse(
-#         question=req.question,
-#         answer=answer,
-#         sources=[SearchResultItem.from_retrieval_result(r) for r in results],
-#     )
+    is_new = True
+    session = None
+    if req.conversation_id:
+        session = session_manager.get_session(req.conversation_id)
+        if session is not None:
+            is_new = False
 
+    if is_new:
+        # First turn: run RAG retrieval and create session
+        results = retriever.search(req.message, limit=req.top_k)
+        conversation_id = session_manager.create_session(sources=results)
+        system_msg = generator.build_system_message(results)
+        session_manager.set_system_message(conversation_id, system_msg["content"])
+    else:
+        # Follow-up turn: reuse stored sources, no new retrieval
+        assert session is not None and req.conversation_id is not None
+        conversation_id = req.conversation_id
+        if not session_manager.can_accept_message(conversation_id):
+            raise HTTPException(
+                status_code=400,
+                detail="Maximale Anzahl an Rückfragen erreicht. Bitte starte eine neue Unterhaltung.",
+            )
+        results = session.sources
 
-# @app.post("/chat")
-# async def chat(
-#     retriever: RetrieverDep,
-#     generator: GeneratorDep,
-#     session_manager: SessionManagerDep,
-#     req: ChatRequest,
-# ) -> ChatResponse:
-#     session_manager.cleanup_expired()
+    session_manager.add_user_message(conversation_id, req.message)
+    messages = session_manager.get_messages(conversation_id)
+    answer = generator.chat(messages, temperature=req.temperature)
+    session_manager.add_assistant_message(conversation_id, answer)
 
-#     is_new = True
-#     session = None
-#     if req.conversation_id:
-#         session = session_manager.get_session(req.conversation_id)
-#         if session is not None:
-#             is_new = False
+    # Build history (user/assistant messages only, exclude system)
+    history = [
+        ChatMessage(role=m["role"], content=m["content"])
+        for m in session_manager.get_messages(conversation_id)
+        if m["role"] != "system"
+    ]
 
-#     if is_new:
-#         # First turn: run RAG retrieval and create session
-#         results = retriever.search(req.message, limit=req.top_k)
-#         conversation_id = session_manager.create_session(sources=results)
-#         system_msg = generator.build_system_message(results)
-#         session_manager.set_system_message(conversation_id, system_msg["content"])
-#     else:
-#         # Follow-up turn: reuse stored sources, no new retrieval
-#         assert session is not None and req.conversation_id is not None
-#         conversation_id = req.conversation_id
-#         if not session_manager.can_accept_message(conversation_id):
-#             raise HTTPException(
-#                 status_code=400,
-#                 detail="Maximale Anzahl an Rückfragen erreicht. Bitte starte eine neue Unterhaltung.",
-#             )
-#         results = session.sources
-
-#     session_manager.add_user_message(conversation_id, req.message)
-#     messages = session_manager.get_messages(conversation_id)
-#     answer = generator.chat(messages, temperature=req.temperature)
-#     session_manager.add_assistant_message(conversation_id, answer)
-
-#     # Build history (user/assistant messages only, exclude system)
-#     history = [
-#         ChatMessage(role=m["role"], content=m["content"])
-#         for m in session_manager.get_messages(conversation_id)
-#         if m["role"] != "system"
-#     ]
-
-#     return ChatResponse(
-#         conversation_id=conversation_id,
-#         answer=answer,
-#         sources=[SearchResultItem.from_retrieval_result(r) for r in results],
-#         history=history,
-#         remaining_followups=session_manager.remaining_followups(conversation_id),
-#     )
+    return ChatResponse(
+        conversation_id=conversation_id,
+        answer=answer,
+        sources=results,
+        history=history,
+        remaining_followups=session_manager.remaining_followups(conversation_id),
+    )
 
 
 def main() -> None:
