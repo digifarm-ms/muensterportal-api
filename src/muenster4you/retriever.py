@@ -1,24 +1,12 @@
 """Similarity search over wiki and web sources."""
 
 from pathlib import Path
-from typing import Protocol
 
-import numpy as np
 from lancedb import connect
-from numpy.typing import NDArray
 
+from muenster4you.embedder import TextEmbedder
 from muenster4you.lancedb import WIKIPAGE_TABLE_NAME
 from muenster4you.types import RetrievalResult
-
-
-class TextEmbedder(Protocol):
-    """Turns a text into a normalized embedding vector.
-
-    Returns a float32 ndarray — LanceDB's search casts to this internally,
-    so matching it avoids an extra allocation.
-    """
-
-    def encode(self, text: str) -> NDArray[np.float32]: ...
 
 
 class LanceDBRetriever:
