@@ -13,11 +13,6 @@ from . import FakeEmbedder
 
 
 @pytest.fixture
-def numpy_rng() -> Generator:
-    return np.random.default_rng(seed=42)
-
-
-@pytest.fixture
 def retriever_with_pages(numpy_rng: Generator):
     retriever = LanceDBRetriever(
         db_path="memory://", embedder=FakeEmbedder(rng=numpy_rng)
