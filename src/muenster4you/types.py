@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from datetime import datetime
+from enum import StrEnum, auto
 from typing import TypedDict
 
 
@@ -19,12 +20,14 @@ class WikiPage(BaseWikiPage):
     embedding: list[float]
 
 
+class RetrievalSource(StrEnum):
+    WIKI = auto()
+    WEBSEARCH = auto()
+
+
 @dataclass
 class RetrievalResult:
-    page_id: int
-    page_title: str
-    content_text: str
-    similarity_score: float
-    page_len: int
-    source: str = "wiki"
-    source_url: str | None = None  # URL for web results
+    content: str
+    score: float
+    source: RetrievalSource
+    url: str
