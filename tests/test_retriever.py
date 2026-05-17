@@ -1,26 +1,15 @@
 """Smoke test for the LanceDB retriever using an in-memory database."""
 
-from dataclasses import dataclass
 from datetime import datetime
 
 import numpy as np
 from numpy.random import Generator
 import pytest
-from numpy.typing import NDArray
 
 from muenster4you.lancedb import EMBEDDING_DIM, LanceDBWikiPage, WIKIPAGE_TABLE_NAME
 from muenster4you.retriever import LanceDBRetriever
 
-
-
-@dataclass
-class FakeEmbedder:
-    """Returns a predetermined vector regardless of input."""
-
-    rng: Generator
-
-    def encode(self, text: str) -> NDArray[np.float32]:
-        return self.rng.standard_normal(EMBEDDING_DIM).astype(np.float32)
+from . import FakeEmbedder
 
 
 @pytest.fixture
