@@ -1,16 +1,24 @@
 """Orchestrates wiki + web retrieval and cross-encoder reranking."""
 
+from typing import Protocol
+
 from muenster4you.reranker import Reranker
-from muenster4you.retriever import LanceDBRetriever
 from muenster4you.types import RetrievalResult
-from muenster4you.websearch import TavilySearcher
+
+
+class WikiRetriever(Protocol):
+    def search(self, query: str, top_k: int) -> list[RetrievalResult]: ...
+
+
+class WebSearcher(Protocol):
+    def search(self, query: str, max_results: int) -> list[RetrievalResult]: ...
 
 
 class RetrievalOrchestrator:
     def __init__(
         self,
-        wiki_retriever: LanceDBRetriever,
-        web_searcher: TavilySearcher | None,
+        wiki_retriever: WikiRetriever,
+        web_searcher: WebSearcher | None,
         reranker: Reranker | None,
         rerank_top_k: int,
         oversample_factor: int,
