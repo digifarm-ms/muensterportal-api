@@ -4,9 +4,8 @@ from typing import Iterator, List
 
 from openai import OpenAI
 
+from ..retrieval import RetrievalResult
 from .config import config
-from .retrieval import RetrievalResult
-
 
 # German RAG prompt template (single-turn)
 GERMAN_RAG_PROMPT = """Du bist ein hilfreicher Assistent für Informationen über die Stadt Münster in Deutschland. Deine Aufgabe ist es, Fragen basierend auf den bereitgestellten Dokumenten zu beantworten.
@@ -68,7 +67,9 @@ class RAGGenerator:
                 api_key="ollama",
             )
 
-        print(f"RAG Generator initialized with provider={self.provider}, model={self.model_name}")
+        print(
+            f"RAG Generator initialized with provider={self.provider}, model={self.model_name}"
+        )
 
     def _format_context(self, results: List[RetrievalResult]) -> str:
         """Format retrieved documents into context string."""
@@ -111,7 +112,9 @@ class RAGGenerator:
             )
             return response.output_text
 
-    def _call_chat(self, messages: list[dict], temperature: float, max_tokens: int) -> str:
+    def _call_chat(
+        self, messages: list[dict], temperature: float, max_tokens: int
+    ) -> str:
         """Multi-turn generation: send a message history, get a text response."""
         if self.provider == "mistral":
             response = self.client.chat.completions.create(
@@ -130,7 +133,9 @@ class RAGGenerator:
             )
             return response.output_text
 
-    def _call_stream(self, prompt: str, temperature: float, max_tokens: int) -> Iterator[str]:
+    def _call_stream(
+        self, prompt: str, temperature: float, max_tokens: int
+    ) -> Iterator[str]:
         """Streaming single-turn generation."""
         if self.provider == "mistral":
             stream = self.client.chat.completions.create(
@@ -226,24 +231,24 @@ class RAGGenerator:
 
 if __name__ == "__main__":
     # Test generation with dummy context
-    from .retrieval import RetrievalResult
+    from ..retrieval import RetrievalResult
 
     dummy_docs = [
         RetrievalResult(
             page_id=1,
             page_title="Hofläden",
             content_text="In Münster gibt es viele Hofläden, die frisches Gemüse und Obst verkaufen. "
-                         "Besonders beliebt sind die Hofläden in Handorf und Hiltrup.",
+            "Besonders beliebt sind die Hofläden in Handorf und Hiltrup.",
             similarity_score=0.85,
-            page_len=200
+            page_len=200,
         ),
         RetrievalResult(
             page_id=2,
             page_title="Freizeit",
             content_text="Münster bietet viele Freizeitmöglichkeiten wie Radfahren am Aasee, "
-                         "Besuche im Allwetterzoo oder Spaziergänge in der Altstadt.",
+            "Besuche im Allwetterzoo oder Spaziergänge in der Altstadt.",
             similarity_score=0.72,
-            page_len=150
+            page_len=150,
         ),
     ]
 
