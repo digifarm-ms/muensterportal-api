@@ -48,36 +48,16 @@ class QueryRequest(BaseModel):
     temperature: float = Field(default=0.7, ge=0.0, le=1.0)
 
 
-class SearchResultItem(BaseModel):
-    page_id: int
-    page_title: str
-    content_text: str
-    similarity_score: float
-    page_len: int
-    source: str
-
-    @classmethod
-    def from_retrieval_result(cls, r: RetrievalResult) -> "SearchResultItem":
-        return cls(
-            page_id=r.page_id,
-            page_title=r.page_title,
-            content_text=r.content_text,
-            similarity_score=r.similarity_score,
-            page_len=r.page_len,
-            source=r.source,
-        )
-
-
 class SearchResponse(BaseModel):
     query: str | None
-    results: list[SearchResultItem] = []
+    results: list[RetrievalResult] = []
     message: str | None = None
 
 
 class QueryResponse(BaseModel):
     question: str
     answer: str
-    sources: list[SearchResultItem]
+    sources: list[RetrievalResult]
 
 
 class ChatRequest(BaseModel):
@@ -95,7 +75,7 @@ class ChatMessage(BaseModel):
 class ChatResponse(BaseModel):
     conversation_id: str
     answer: str
-    sources: list[SearchResultItem]
+    sources: list[RetrievalResult]
     history: list[ChatMessage]
     remaining_followups: int
 
@@ -122,7 +102,7 @@ async def search(
 
     return SearchResponse(
         query=query,
-        results=[SearchResultItem.from_retrieval_result(r) for r in results],
+        results=results,
     )
 
 

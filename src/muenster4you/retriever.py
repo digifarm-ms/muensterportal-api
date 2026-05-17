@@ -1,12 +1,13 @@
 """Similarity search over wiki and web sources."""
 
 from pathlib import Path
+from urllib.parse import quote
 
 from lancedb import connect
 
 from muenster4you.embedder import TextEmbedder
 from muenster4you.lancedb import WIKIPAGE_TABLE_NAME
-from muenster4you.types import RetrievalResult
+from muenster4you.types import RetrievalResult, RetrievalSource
 
 
 class LanceDBRetriever:
@@ -26,12 +27,10 @@ class LanceDBRetriever:
         )
         return [
             RetrievalResult(
-                page_id=r["id"],
-                page_title=r["title"],
-                content_text=r["content"],
-                similarity_score=1.0 - r["_distance"],
-                page_len=len(r["content"]),
-                source="wiki",
+                content=r["content"],
+                score=1.0 - r["_distance"],
+                source=RetrievalSource.WIKI,
+                url=f"/wiki/{quote(r['page_title'].replace(' ', '_'))}",
             )
             for r in results
         ]

@@ -1,13 +1,21 @@
 """Streamlit application for Münster4You Wiki RAG system."""
 
 import time
+from urllib.parse import unquote
 
 import streamlit as st
 
+from muenster4you.lancedb import LanceDBMediaWiki
 from muenster4you.rag.config import config
 from muenster4you.rag.generation import RAGGenerator
-from muenster4you.rag.retrieval import WikiRetriever
-from muenster4you.rag.websearch import DuckDuckGoSearcher
+from muenster4you.types import RetrievalSource
+from muenster4you.websearch import TavilySearcher
+
+
+def _result_title(result) -> str:
+    if result.source == RetrievalSource.WIKI:
+        return unquote(result.url.rsplit("/", 1)[-1]).replace("_", " ")
+    return result.url
 
 # Page configuration
 st.set_page_config(
@@ -18,7 +26,7 @@ st.set_page_config(
 @st.cache_resource
 def load_retriever():
     """Load and cache the retriever."""
-    return WikiRetriever()
+    return LanceDBMediaWiki(config.lance_path_resolved)
 
 
 @st.cache_resource
@@ -27,9 +35,9 @@ def load_generator():
     return RAGGenerator()
 
 
-def get_web_searcher(site_filters: list[str], max_results: int, embedder=None) -> DuckDuckGoSearcher:
-    """Get DuckDuckGo web searcher with optional embedder for semantic scoring."""
-    return DuckDuckGoSearcher(site_filters=site_filters, max_results=max_results, embedder=embedder)
+def get_web_searcher(site_filters: list[str], max_results: int) -> TavilySearcher:
+    """Get Tavily web searcher."""
+    return TavilySearcher(site_filters=site_filters, max_results=max_results)
 
 
 def main():
@@ -68,23 +76,15 @@ def main():
         websearch_enabled = st.checkbox(
             "Web-Suche aktivieren",
             value=False,
-            help="Durchsucht zusätzlich das Web (via DuckDuckGo). Hinweis: Ergebnisse können aufgrund von Rate-Limiting variieren.",
+            help="Durchsucht zusätzlich das Web via Tavily, beschränkt auf kuratierte Münster-Domains.",
         )
-
-        available_sites = [
-            "muenster.de",
-            "stadt-muenster.de",
-            "muensterland.de",
-            "wn.de",
-            "muenster.org",
-        ]
 
         site_filters = st.multiselect(
             "Website-Filter",
-            options=available_sites,
-            default=config.websearch_site_filters[:3],
+            options=config.websearch_site_filters,
+            default=config.websearch_site_filters,
             disabled=not websearch_enabled,
-            help="Suche auf diese Domains beschränken",
+            help="Suche auf diese Domains beschränken (bis zu 300 möglich)",
         )
 
         web_results_count = st.slider(
@@ -119,8 +119,7 @@ def main():
         if st.button("📊 Statistiken anzeigen"):
             try:
                 retriever = load_retriever()
-                st.metric("Anzahl Dokumente", len(retriever.df))
-                st.metric("Embedding Dimension", retriever.doc_embeddings.shape[1])
+                st.metric("Anzahl Dokumente", retriever.table.count_rows())
             except Exception as e:
                 st.error(f"Fehler beim Laden der Statistiken: {e}")
 
@@ -153,25 +152,22 @@ def main():
             # Retrieve wiki documents
             with st.spinner("Suche relevante Wiki-Dokumente..."):
                 start_time = time.time()
-                wiki_results = retriever.retrieve(question, top_k=top_k)
+                wiki_results = retriever.search(question, limit=top_k)
                 wiki_retrieval_time = time.time() - start_time
 
             # Retrieve web results if enabled
             web_results = []
             web_retrieval_time = 0.0
             if websearch_enabled and site_filters:
-                with st.spinner("Suche im Web (DuckDuckGo)..."):
+                with st.spinner("Suche im Web (Tavily)..."):
                     start_time = time.time()
-                    # Pass embedder for semantic similarity scoring
-                    web_searcher = get_web_searcher(
-                        site_filters, web_results_count, embedder=retriever.embedder
-                    )
+                    web_searcher = get_web_searcher(site_filters, web_results_count)
                     web_results = web_searcher.retrieve(question)
                     web_retrieval_time = time.time() - start_time
 
             # Merge and sort results by score
             all_results = wiki_results + web_results
-            all_results.sort(key=lambda x: x.similarity_score, reverse=True)
+            all_results.sort(key=lambda x: x.score, reverse=True)
 
             retrieval_time = wiki_retrieval_time + web_retrieval_time
 
@@ -191,28 +187,28 @@ def main():
 
             # Create columns for document cards
             for i, result in enumerate(all_results, 1):
-                # Source icon
-                source_icon = "🌐" if result.source == "web" else "📖"
-                source_label = "Web" if result.source == "web" else "Wiki"
+                is_web = result.source == RetrievalSource.WEBSEARCH
+                source_icon = "🌐" if is_web else "📖"
+                source_label = "Web" if is_web else "Wiki"
+                title = _result_title(result)
 
                 with st.expander(
-                    f"**{i}. {source_icon} [{source_label}] {result.page_title}** - Relevanz: {result.similarity_score:.1%}",
+                    f"**{i}. {source_icon} [{source_label}] {title}** - Relevanz: {result.score:.1%}",
                     expanded=(i == 1),  # Expand first result
                 ):
                     st.markdown(f"**Quelle:** {source_label}")
-                    st.markdown(f"**Ähnlichkeit:** {result.similarity_score:.3f}")
+                    st.markdown(f"**Ähnlichkeit:** {result.score:.3f}")
 
-                    # Show URL for web results
-                    if result.source == "web" and result.source_url:
-                        st.markdown(f"**URL:** [{result.source_url}]({result.source_url})")
+                    if is_web and result.url:
+                        st.markdown(f"**URL:** [{result.url}]({result.url})")
 
-                    st.markdown(f"**Länge:** {result.page_len} Zeichen")
+                    st.markdown(f"**Länge:** {len(result.content)} Zeichen")
                     st.divider()
 
                     # Show content preview
                     preview_length = 500
-                    content_preview = result.content_text[:preview_length]
-                    if len(result.content_text) > preview_length:
+                    content_preview = result.content[:preview_length]
+                    if len(result.content) > preview_length:
                         content_preview += "..."
 
                     st.markdown(content_preview)

@@ -1,10 +1,12 @@
 """Generation layer using OpenAI-compatible API for RAG responses."""
 
 from typing import Iterator, List
+from urllib.parse import unquote
 
 from openai import OpenAI
 
-from ..retrieval import RetrievalResult
+from ..retriever import RetrievalResult
+from ..types import RetrievalSource
 from .config import config
 
 # German RAG prompt template (single-turn)
@@ -77,17 +79,20 @@ class RAGGenerator:
 
         for i, result in enumerate(results, 1):
             # Truncate very long content
-            content = result.content_text
+            content = result.content
             if len(content) > 2000:
                 content = content[:2000] + "..."
 
-            # Add source label (Wiki or Web)
-            source_label = "Web" if result.source == "web" else "Wiki"
-            header = f"[Dokument {i} ({source_label}): {result.page_title}]"
+            is_web = result.source == RetrievalSource.WEBSEARCH
+            source_label = "Web" if is_web else "Wiki"
+            if is_web:
+                title = result.url
+            else:
+                title = unquote(result.url.rsplit("/", 1)[-1]).replace("_", " ")
+            header = f"[Dokument {i} ({source_label}): {title}]"
 
-            # Add URL for web sources
-            if result.source == "web" and result.source_url:
-                header += f"\nURL: {result.source_url}"
+            if is_web and result.url:
+                header += f"\nURL: {result.url}"
 
             context_parts.append(f"{header}\n{content}\n")
 
@@ -231,24 +236,20 @@ class RAGGenerator:
 
 if __name__ == "__main__":
     # Test generation with dummy context
-    from ..retrieval import RetrievalResult
-
     dummy_docs = [
         RetrievalResult(
-            page_id=1,
-            page_title="Hofläden",
-            content_text="In Münster gibt es viele Hofläden, die frisches Gemüse und Obst verkaufen. "
+            content="In Münster gibt es viele Hofläden, die frisches Gemüse und Obst verkaufen. "
             "Besonders beliebt sind die Hofläden in Handorf und Hiltrup.",
-            similarity_score=0.85,
-            page_len=200,
+            score=0.85,
+            source=RetrievalSource.WIKI,
+            url="/wiki/Hofl%C3%A4den",
         ),
         RetrievalResult(
-            page_id=2,
-            page_title="Freizeit",
-            content_text="Münster bietet viele Freizeitmöglichkeiten wie Radfahren am Aasee, "
+            content="Münster bietet viele Freizeitmöglichkeiten wie Radfahren am Aasee, "
             "Besuche im Allwetterzoo oder Spaziergänge in der Altstadt.",
-            similarity_score=0.72,
-            page_len=150,
+            score=0.72,
+            source=RetrievalSource.WIKI,
+            url="/wiki/Freizeit",
         ),
     ]
 
