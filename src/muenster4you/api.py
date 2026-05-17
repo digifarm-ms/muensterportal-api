@@ -3,7 +3,7 @@
 from functools import lru_cache
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, Query
 from pydantic import BaseModel, Field
 from sentence_transformers import SentenceTransformer
 
@@ -115,15 +115,9 @@ async def root():
 @app.get("/search")
 async def search(
     retriever: RetrieverDep,
-    query: str = Query(..., description="Search query string"),
+    query: str = Query(..., min_length=3, description="Search query string"),
     top_k: int = Query(5, ge=1, le=20),
 ) -> SearchResponse:
-    if not query:
-        raise HTTPException(
-            status_code=400,
-            detail="Query parameter 'q' is required and cannot be empty.",
-        )
-
     results = retriever.search(query, top_k=top_k)
 
     return SearchResponse(

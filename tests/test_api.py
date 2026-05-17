@@ -29,9 +29,9 @@ def test_search_endpoint(test_client: TestClient) -> None:
     assert len(response.json()["results"]) == 2
 
 
-def test_search_endpoint_returns_400_for_empty_query(test_client: TestClient) -> None:
-    params = {"query": ""}
+def test_search_endpoint_returns_422_for_empty_query(test_client: TestClient) -> None:
+    params = {"query": "ab"}
 
     response = test_client.get("/search", params=params)
 
-    assert response.status_code == 400
+    assert response.status_code == 422
