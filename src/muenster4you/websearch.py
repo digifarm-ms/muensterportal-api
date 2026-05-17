@@ -5,19 +5,10 @@ from typing import Literal
 
 from tavily import TavilyClient
 
+from muenster4you.types import RetrievalResult, RetrievalSource
+
 
 SearchDepth = Literal["basic", "advanced", "fast", "ultra-fast"]
-
-
-@dataclass
-class WebSearchResult:
-    """Raw result from Tavily search."""
-
-    title: str
-    url: str
-    description: str
-    score: float
-    rank: int
 
 
 @dataclass
@@ -29,7 +20,7 @@ class TavilySearcher:
 
     def search(
         self, query: str, max_results: int = 20, search_depth: SearchDepth = "basic"
-    ) -> list[WebSearchResult]:
+    ) -> list[RetrievalResult]:
         """
         Search Tavily, restricted to configured Münster domains.
 
@@ -38,7 +29,7 @@ class TavilySearcher:
             max_results: Maximum number of results to return
 
         Returns:
-            List of WebSearchResult objects (empty on API error)
+            List of RetrievalResult objects with source=WEBSEARCH
         """
 
         response = self.client.search(
@@ -48,18 +39,15 @@ class TavilySearcher:
             search_depth=search_depth,
         )
 
-        results = []
-        for rank, item in enumerate(response["results"], start=1):
-            results.append(
-                WebSearchResult(
-                    title=item["title"],
-                    url=item["url"],
-                    description=item["content"],
-                    score=float(item["score"]),
-                    rank=rank,
-                )
+        return [
+            RetrievalResult(
+                content=item["content"],
+                score=float(item["score"]),
+                source=RetrievalSource.WEBSEARCH,
+                url=item["url"],
             )
-        return results
+            for item in response["results"]
+        ]
 
 
 if __name__ == "__main__":
@@ -76,7 +64,5 @@ if __name__ == "__main__":
         ],
     )
     results = searcher.search("best restaurants in Münster", max_results=5)
-    for result in results:
-        print(
-            f"{result.rank}. {result.title} ({result.url}) - {result.description} [Score: {result.score}]"
-        )
+    for rank, result in enumerate(results, start=1):
+        print(f"{rank}. {result.url} - {result.content} [Score: {result.score}]")
