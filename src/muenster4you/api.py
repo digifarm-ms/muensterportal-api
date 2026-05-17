@@ -115,19 +115,19 @@ async def root():
 @app.get("/search")
 async def search(
     retriever: RetrieverDep,
-    q: str = Query(..., description="Search query string"),
+    query: str = Query(..., description="Search query string"),
     top_k: int = Query(5, ge=1, le=20),
 ) -> SearchResponse:
-    if not q:
+    if not query:
         raise HTTPException(
             status_code=400,
             detail="Query parameter 'q' is required and cannot be empty.",
         )
 
-    results = retriever.search(q, top_k=top_k)
+    results = retriever.search(query, top_k=top_k)
 
     return SearchResponse(
-        query=q,
+        query=query,
         results=[SearchResultItem.from_retrieval_result(r) for r in results],
     )
 
