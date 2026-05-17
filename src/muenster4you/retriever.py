@@ -19,7 +19,10 @@ class LanceDBRetriever:
         query_vector = self.embedder.encode(query)
         table = self.conn.open_table(WIKIPAGE_TABLE_NAME)
         results = (
-            table.search(query_vector).distance_type("cosine").limit(top_k).to_list()
+            table.search(query_vector)
+            .distance_type("cosine")  # type: ignore[reportAttributeAccessIssue]
+            .limit(top_k)
+            .to_list()
         )
         return [
             RetrievalResult(
