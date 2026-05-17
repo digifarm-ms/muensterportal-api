@@ -12,12 +12,6 @@ from muenster4you.lancedb import EMBEDDING_DIM, LanceDBWikiPage, WIKIPAGE_TABLE_
 from muenster4you.retriever import LanceDBRetriever
 
 
-def _unit_vector(seed: int) -> NDArray[np.float32]:
-    rng = np.random.default_rng(seed)
-    vec = rng.standard_normal(EMBEDDING_DIM).astype(np.float32)
-    vec /= np.linalg.norm(vec)
-    return vec
-
 
 @dataclass
 class FakeEmbedder:
