@@ -3,13 +3,25 @@ from collections.abc import Iterator
 from fastapi.testclient import TestClient
 import pytest
 
-from muenster4you.api import app, get_retriever
+from muenster4you.api import app, get_reranker, get_retriever, get_web_searcher
 from muenster4you.retriever import LanceDBRetriever
+from muenster4you.types import RetrievalResult
+
+
+class _PassThroughReranker:
+    """Test double: returns the first top_k candidates unchanged."""
+
+    def rerank(
+        self, query: str, candidates: list[RetrievalResult], top_k: int
+    ) -> list[RetrievalResult]:
+        return candidates[:top_k]
 
 
 @pytest.fixture
 def test_client(retriever_with_pages: LanceDBRetriever) -> Iterator[TestClient]:
     app.dependency_overrides[get_retriever] = lambda: retriever_with_pages
+    app.dependency_overrides[get_web_searcher] = lambda: None
+    app.dependency_overrides[get_reranker] = lambda: _PassThroughReranker()
 
     with TestClient(app=app) as test_client:
         yield test_client
