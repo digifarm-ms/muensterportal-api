@@ -5,11 +5,13 @@ from urllib.parse import unquote
 
 import streamlit as st
 
+from muenster4you.config import AppConfig
 from muenster4you.lancedb import LanceDBMediaWiki
-from muenster4you.rag.config import config
 from muenster4you.rag.generation import RAGGenerator
 from muenster4you.types import RetrievalSource
 from muenster4you.websearch import TavilySearcher
+
+config = AppConfig()
 
 
 def _result_title(result) -> str:
@@ -26,13 +28,13 @@ st.set_page_config(
 @st.cache_resource
 def load_retriever():
     """Load and cache the retriever."""
-    return LanceDBMediaWiki(config.lance_path_resolved)
+    return LanceDBMediaWiki(config.lancedb_fp)
 
 
 @st.cache_resource
 def load_generator():
     """Load and cache the generator."""
-    return RAGGenerator()
+    return RAGGenerator(config)
 
 
 def get_web_searcher(site_filters: list[str], max_results: int) -> TavilySearcher:
@@ -55,7 +57,7 @@ def main():
             "Anzahl Dokumente",
             min_value=1,
             max_value=10,
-            value=config.default_top_k,
+            value=config.rerank_top_k,
             help="Wie viele relevante Dokumente sollen abgerufen werden?",
         )
 

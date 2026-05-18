@@ -4,8 +4,8 @@ import time
 import uuid
 from dataclasses import dataclass, field
 
-from .config import config
-from .retrieval import RetrievalResult
+from ..config import AppConfig
+from ..types import RetrievalResult
 
 
 @dataclass
@@ -23,16 +23,10 @@ class ConversationSession:
 class ChatSessionManager:
     """Manages in-memory chat sessions with TTL expiry."""
 
-    def __init__(
-        self,
-        ttl: int | None = None,
-        max_followups: int | None = None,
-    ):
+    def __init__(self, config: AppConfig):
         self._sessions: dict[str, ConversationSession] = {}
-        self._ttl = ttl if ttl is not None else config.chat_session_ttl
-        self._max_followups = (
-            max_followups if max_followups is not None else config.chat_max_followups
-        )
+        self._ttl = config.chat_session_ttl
+        self._max_followups = config.chat_max_followups
 
     def create_session(self, sources: list[RetrievalResult]) -> str:
         session_id = uuid.uuid4().hex
