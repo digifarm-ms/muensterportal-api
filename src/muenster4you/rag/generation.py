@@ -5,9 +5,8 @@ from urllib.parse import unquote
 
 from openai import OpenAI
 
-from ..retriever import RetrievalResult
-from ..types import RetrievalSource
-from .config import config
+from ..config import AppConfig
+from ..types import RetrievalResult, RetrievalSource
 
 # German RAG prompt template (single-turn)
 GERMAN_RAG_PROMPT = """Du bist ein hilfreicher Assistent für Informationen über die Stadt Münster in Deutschland. Deine Aufgabe ist es, Fragen basierend auf den bereitgestellten Dokumenten zu beantworten.
@@ -44,28 +43,21 @@ Kontext-Dokumente:
 class RAGGenerator:
     """Generator for RAG responses using OpenAI-compatible APIs (Ollama or Mistral)."""
 
-    def __init__(
-        self,
-        model_name: str | None = None,
-        ollama_url: str | None = None,
-        temperature: float | None = None,
-        max_tokens: int | None = None,
-    ):
+    def __init__(self, config: AppConfig):
         self.provider = config.llm_provider
-        self.default_temperature = temperature or config.default_temperature
-        self.default_max_tokens = max_tokens or config.default_max_tokens
+        self.default_temperature = config.default_temperature
+        self.default_max_tokens = config.default_max_tokens
 
         if self.provider == "mistral":
-            self.model_name = model_name or config.mistral_model
+            self.model_name = config.mistral_model
             self.client = OpenAI(
                 base_url="https://api.mistral.ai/v1",
                 api_key=config.mistral_api_key,
             )
         else:
-            self.model_name = model_name or config.generation_model
-            base_url = ollama_url or config.ollama_url
+            self.model_name = config.generation_model
             self.client = OpenAI(
-                base_url=f"{base_url}/v1",
+                base_url=f"{config.ollama_url}/v1",
                 api_key="ollama",
             )
 
@@ -78,7 +70,6 @@ class RAGGenerator:
         context_parts = []
 
         for i, result in enumerate(results, 1):
-            # Truncate very long content
             content = result.content
             if len(content) > 2000:
                 content = content[:2000] + "..."
@@ -232,32 +223,3 @@ class RAGGenerator:
         except Exception as e:
             print(f"Error generating response: {e}")
             yield f"Entschuldigung, es gab einen Fehler bei der Generierung der Antwort: {e}"
-
-
-if __name__ == "__main__":
-    # Test generation with dummy context
-    dummy_docs = [
-        RetrievalResult(
-            content="In Münster gibt es viele Hofläden, die frisches Gemüse und Obst verkaufen. "
-            "Besonders beliebt sind die Hofläden in Handorf und Hiltrup.",
-            score=0.85,
-            source=RetrievalSource.WIKI,
-            url="/wiki/Hofl%C3%A4den",
-        ),
-        RetrievalResult(
-            content="Münster bietet viele Freizeitmöglichkeiten wie Radfahren am Aasee, "
-            "Besuche im Allwetterzoo oder Spaziergänge in der Altstadt.",
-            score=0.72,
-            source=RetrievalSource.WIKI,
-            url="/wiki/Freizeit",
-        ),
-    ]
-
-    generator = RAGGenerator()
-
-    test_query = "Wo kann ich frisches Gemüse kaufen?"
-    print(f"Query: {test_query}\n")
-    print("Generating answer...")
-
-    answer = generator.generate(test_query, dummy_docs)
-    print(f"\nAnswer:\n{answer}")
