@@ -29,7 +29,7 @@ class _SpyCrossEncoder:
 
 def _patch_cross_encoder(monkeypatch, spy: _SpyCrossEncoder) -> None:
     """Make CrossEncoderReranker(model_id=...) return this spy, no I/O."""
-    monkeypatch.setattr(reranker_module, "CrossEncoder", lambda _model_id: spy)
+    monkeypatch.setattr(reranker_module, "CrossEncoder", lambda *_a, **_kw: spy)
 
 
 def test_rerank_sorts_by_new_scores_descending(monkeypatch):

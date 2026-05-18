@@ -14,6 +14,9 @@ class AppConfig(BaseSettings):
         extra="ignore",
     )
 
+    def __hash__(self) -> int:
+        return id(self)
+
     # Paths
     lancedb_fp: Path = Path("lancedb")
 

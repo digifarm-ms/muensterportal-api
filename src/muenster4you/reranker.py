@@ -16,7 +16,7 @@ class Reranker(Protocol):
 
 class CrossEncoderReranker:
     def __init__(self, model_id: str):
-        self.model = CrossEncoder(model_id)
+        self.model = CrossEncoder(model_id, trust_remote_code=True)
 
     def rerank(
         self, query: str, candidates: list[RetrievalResult], top_k: int

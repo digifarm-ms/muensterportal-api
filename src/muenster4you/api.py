@@ -1,15 +1,22 @@
-"""FastAPI application with RAG-powered search and query endpoints."""
+"""FastAPI application with RAG-powered search and chat endpoints."""
 
 from functools import lru_cache
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, Query
+from fastapi import Depends, FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field
 from sentence_transformers import SentenceTransformer
+from tavily import TavilyClient
 
 from muenster4you.config import AppConfig
 from muenster4you.embedder import SentenceTransformerEmbedder
-from muenster4you.retriever import LanceDBRetriever, RetrievalResult
+from muenster4you.rag.generation import RAGGenerator
+from muenster4you.rag.sessions import ChatSessionManager
+from muenster4you.reranker import CrossEncoderReranker, Reranker
+from muenster4you.retrieval import RetrievalOrchestrator
+from muenster4you.retriever import LanceDBRetriever
+from muenster4you.types import RetrievalResult
+from muenster4you.websearch import TavilySearcher
 
 
 # --- Dependencies ---
@@ -33,6 +40,59 @@ def get_retriever(config: ConfigDep) -> LanceDBRetriever:
 RetrieverDep = Annotated[LanceDBRetriever, Depends(get_retriever)]
 
 
+@lru_cache
+def get_web_searcher(config: ConfigDep) -> TavilySearcher | None:
+    if not config.websearch_enabled or not config.tavily_api_key:
+        return None
+    client = TavilyClient(api_key=config.tavily_api_key)
+    return TavilySearcher(client=client, site_filters=config.websearch_site_filters)
+
+
+WebSearcherDep = Annotated[TavilySearcher | None, Depends(get_web_searcher)]
+
+
+@lru_cache
+def get_reranker(config: ConfigDep) -> Reranker:
+    return CrossEncoderReranker(model_id=config.reranker_model)
+
+
+RerankerDep = Annotated[Reranker, Depends(get_reranker)]
+
+
+def get_orchestrator(
+    config: ConfigDep,
+    retriever: RetrieverDep,
+    web_searcher: WebSearcherDep,
+    reranker: RerankerDep,
+) -> RetrievalOrchestrator:
+    return RetrievalOrchestrator(
+        wiki_retriever=retriever,
+        web_searcher=web_searcher,
+        reranker=reranker,
+        rerank_top_k=config.rerank_top_k,
+        oversample_factor=config.retrieval_oversample_factor,
+    )
+
+
+OrchestratorDep = Annotated[RetrievalOrchestrator, Depends(get_orchestrator)]
+
+
+@lru_cache
+def get_generator(config: ConfigDep) -> RAGGenerator:
+    return RAGGenerator(config)
+
+
+GeneratorDep = Annotated[RAGGenerator, Depends(get_generator)]
+
+
+@lru_cache
+def get_session_manager(config: ConfigDep) -> ChatSessionManager:
+    return ChatSessionManager(config)
+
+
+SessionManagerDep = Annotated[ChatSessionManager, Depends(get_session_manager)]
+
+
 # --- App ---
 
 
@@ -51,7 +111,6 @@ class SearchResponse(BaseModel):
 class ChatRequest(BaseModel):
     message: str
     conversation_id: str | None = None
-    top_k: int = Field(default=5, ge=1, le=20)
     temperature: float = Field(default=0.7, ge=0.0, le=1.0)
 
 
@@ -82,21 +141,16 @@ async def root():
 
 @app.get("/search")
 async def search(
-    retriever: RetrieverDep,
+    orchestrator: OrchestratorDep,
     query: str = Query(..., min_length=3, description="Search query string"),
-    top_k: int = Query(5, ge=1, le=20),
 ) -> SearchResponse:
-    results = retriever.search(query, top_k=top_k)
-
-    return SearchResponse(
-        query=query,
-        results=results,
-    )
+    results = orchestrator.retrieve(query)
+    return SearchResponse(query=query, results=results)
 
 
 @app.post("/chat")
 async def chat(
-    retriever: RetrieverDep,
+    orchestrator: OrchestratorDep,
     generator: GeneratorDep,
     session_manager: SessionManagerDep,
     req: ChatRequest,
@@ -111,13 +165,11 @@ async def chat(
             is_new = False
 
     if is_new:
-        # First turn: run RAG retrieval and create session
-        results = retriever.search(req.message, limit=req.top_k)
+        results = orchestrator.retrieve(req.message)
         conversation_id = session_manager.create_session(sources=results)
         system_msg = generator.build_system_message(results)
         session_manager.set_system_message(conversation_id, system_msg["content"])
     else:
-        # Follow-up turn: reuse stored sources, no new retrieval
         assert session is not None and req.conversation_id is not None
         conversation_id = req.conversation_id
         if not session_manager.can_accept_message(conversation_id):
@@ -132,7 +184,6 @@ async def chat(
     answer = generator.chat(messages, temperature=req.temperature)
     session_manager.add_assistant_message(conversation_id, answer)
 
-    # Build history (user/assistant messages only, exclude system)
     history = [
         ChatMessage(role=m["role"], content=m["content"])
         for m in session_manager.get_messages(conversation_id)
