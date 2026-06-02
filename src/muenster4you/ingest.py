@@ -1,6 +1,7 @@
 """Ingest MediaWiki pages from SQLite into LanceDB."""
 
 import argparse
+import contextlib
 import re
 from collections.abc import Iterable
 from itertools import batched
@@ -28,16 +29,12 @@ def clean_wikitext(content: str) -> str:
         wikicode = mwparserfromhell.parse(content)
 
         for template in wikicode.filter_templates():
-            try:
+            with contextlib.suppress(ValueError):
                 wikicode.remove(template)
-            except ValueError:
-                pass
 
         for tag in wikicode.filter_tags():
-            try:
+            with contextlib.suppress(ValueError):
                 wikicode.remove(tag)
-            except ValueError:
-                pass
 
         text = wikicode.strip_code()
 
@@ -88,13 +85,13 @@ def clean_pages(pages: Iterable[BaseWikiPage]) -> Iterable[BaseWikiPage]:
 def add_embeddings(
     pages: Iterable[BaseWikiPage], embedder: SentenceTransformer, batch_size: int = 32
 ) -> Iterable[WikiPage]:
-    for batch in batched(pages, batch_size):
+    for batch in batched(pages, batch_size, strict=False):
         texts = [page["content"] for page in batch]
         embeddings = embedder.encode(
             texts, prompt_name="document", show_progress_bar=False
         )
 
-        for page, embedding in zip(batch, embeddings):
+        for page, embedding in zip(batch, embeddings, strict=True):
             yield {
                 **page,
                 "embedding": embedding.tolist(),
@@ -117,7 +114,7 @@ def ingest(
     raw_pages = load_pages_from_media_wiki(sqlite, namespace)
     pages = clean_pages(raw_pages)
     pages_with_embeddings = add_embeddings(pages, embedder, batch_size)
-    for batch in batched(pages_with_embeddings, 50):
+    for batch in batched(pages_with_embeddings, 50, strict=False):
         lance.upsert_pages(list(batch))
 
 

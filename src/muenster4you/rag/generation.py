@@ -1,6 +1,6 @@
 """Generation layer using OpenAI-compatible API for RAG responses."""
 
-from typing import Iterator, List
+from collections.abc import Iterator
 from urllib.parse import unquote
 
 from openai import OpenAI
@@ -65,7 +65,7 @@ class RAGGenerator:
             f"RAG Generator initialized with provider={self.provider}, model={self.model_name}"
         )
 
-    def _format_context(self, results: List[RetrievalResult]) -> str:
+    def _format_context(self, results: list[RetrievalResult]) -> str:
         """Format retrieved documents into context string."""
         context_parts = []
 
@@ -159,7 +159,7 @@ class RAGGenerator:
     def generate(
         self,
         query: str,
-        context_docs: List[RetrievalResult],
+        context_docs: list[RetrievalResult],
         temperature: float | None = None,
         max_tokens: int | None = None,
     ) -> str:
@@ -178,7 +178,7 @@ class RAGGenerator:
             print(f"Error generating response: {e}")
             return f"Entschuldigung, es gab einen Fehler bei der Generierung der Antwort: {e}"
 
-    def build_system_message(self, context_docs: List[RetrievalResult]) -> dict:
+    def build_system_message(self, context_docs: list[RetrievalResult]) -> dict:
         """Build a system message with RAG context for multi-turn chat."""
         context = self._format_context(context_docs)
         content = GERMAN_RAG_CHAT_SYSTEM_PROMPT.format(context=context)
@@ -205,7 +205,7 @@ class RAGGenerator:
     def generate_stream(
         self,
         query: str,
-        context_docs: List[RetrievalResult],
+        context_docs: list[RetrievalResult],
         temperature: float | None = None,
         max_tokens: int | None = None,
     ) -> Iterator[str]:

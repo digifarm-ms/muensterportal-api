@@ -24,6 +24,6 @@ class CrossEncoderReranker:
         if not candidates:
             return []
         scores = self.model.predict([(query, c.content) for c in candidates])
-        rescored = [replace(c, score=float(s)) for c, s in zip(candidates, scores)]
+        rescored = [replace(c, score=float(s)) for c, s in zip(candidates, scores, strict=True)]
         rescored.sort(key=lambda r: r.score, reverse=True)
         return rescored[:top_k]

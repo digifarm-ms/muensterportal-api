@@ -1,7 +1,7 @@
 from collections.abc import Iterator
 
-from fastapi.testclient import TestClient
 import pytest
+from fastapi.testclient import TestClient
 
 from muenster4you.api import app, get_reranker, get_retriever, get_web_searcher
 from muenster4you.retriever import LanceDBRetriever
@@ -12,7 +12,7 @@ class _PassThroughReranker:
     """Test double: returns the first top_k candidates unchanged."""
 
     def rerank(
-        self, query: str, candidates: list[RetrievalResult], top_k: int
+        self, _query: str, candidates: list[RetrievalResult], top_k: int
     ) -> list[RetrievalResult]:
         return candidates[:top_k]
 
