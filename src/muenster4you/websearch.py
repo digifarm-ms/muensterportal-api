@@ -16,10 +16,9 @@ class TavilySearcher:
 
     client: TavilyClient
     site_filters: list[str]
+    search_depth: SearchDepth = "basic"
 
-    def search(
-        self, query: str, max_results: int = 20, search_depth: SearchDepth = "basic"
-    ) -> list[RetrievalResult]:
+    def search(self, query: str, max_results: int = 20) -> list[RetrievalResult]:
         """
         Search Tavily, restricted to configured Münster domains.
 
@@ -35,7 +34,7 @@ class TavilySearcher:
             query=query,
             include_domains=self.site_filters,
             max_results=max_results,
-            search_depth=search_depth,
+            search_depth=self.search_depth,
         )
 
         return [

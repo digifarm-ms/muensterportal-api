@@ -42,7 +42,11 @@ RetrieverDep = Annotated[LanceDBRetriever, Depends(get_retriever)]
 @lru_cache
 def get_web_searcher(config: ConfigDep) -> TavilySearcher:
     client = TavilyClient(api_key=config.tavily_api_key)
-    return TavilySearcher(client=client, site_filters=config.websearch_site_filters)
+    return TavilySearcher(
+        client=client,
+        site_filters=config.websearch_site_filters,
+        search_depth=config.tavily_search_depth,
+    )
 
 
 WebSearcherDep = Annotated[TavilySearcher, Depends(get_web_searcher)]
