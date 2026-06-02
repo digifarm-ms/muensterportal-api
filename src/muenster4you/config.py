@@ -21,7 +21,7 @@ class AppConfig(BaseSettings):
     lancedb_fp: Path = Path("lancedb")
 
     # Embeddings
-    embedding_model: str = "jinaai/jina-embeddings-v5-text-small-retrieval"
+    embedding_model: str = "jinaai/jina-embeddings-v5-text-nano-retrieval"
     embedding_batch_size: int = 32
     use_mps: bool = True
 

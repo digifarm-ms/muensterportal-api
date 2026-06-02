@@ -7,8 +7,8 @@ from lancedb import connect
 from muenster4you.types import WikiPage
 
 WIKIPAGE_TABLE_NAME = "mediawiki_pages"
-EMBEDDING_MODEL_NAME = "jinaai/jina-embeddings-v5-text-small-retrieval"
-EMBEDDING_DIM = 1024
+EMBEDDING_MODEL_NAME = "jinaai/jina-embeddings-v5-text-nano-retrieval"
+EMBEDDING_DIM = 768
 
 
 class LanceDBWikiPage(LanceModel):

@@ -90,7 +90,9 @@ def add_embeddings(
 ) -> Iterable[WikiPage]:
     for batch in batched(pages, batch_size):
         texts = [page["content"] for page in batch]
-        embeddings = embedder.encode(texts, show_progress_bar=False)
+        embeddings = embedder.encode(
+            texts, prompt_name="document", show_progress_bar=False
+        )
 
         for page, embedding in zip(batch, embeddings):
             yield {
