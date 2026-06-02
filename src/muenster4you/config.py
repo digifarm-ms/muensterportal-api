@@ -14,16 +14,11 @@ class AppConfig(BaseSettings):
         extra="ignore",
     )
 
-    def __hash__(self) -> int:
-        return id(self)
-
     # Paths
     lancedb_fp: Path = Path("lancedb")
 
     # Embeddings
     embedding_model: str = "jinaai/jina-embeddings-v5-text-nano-retrieval"
-    embedding_batch_size: int = 32
-    use_mps: bool = True
 
     # LLM provider: "ollama" or "mistral"
     llm_provider: str = "ollama"
