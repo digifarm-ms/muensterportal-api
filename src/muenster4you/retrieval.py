@@ -18,7 +18,7 @@ class RetrievalOrchestrator:
     def __init__(
         self,
         wiki_retriever: WikiRetriever,
-        web_searcher: WebSearcher | None,
+        web_searcher: WebSearcher,
         reranker: Reranker | None,
         rerank_top_k: int,
         oversample_factor: int,
@@ -32,11 +32,7 @@ class RetrievalOrchestrator:
     def retrieve(self, query: str) -> list[RetrievalResult]:
         candidate_k = self.rerank_top_k * self.oversample_factor
         wiki = self.wiki_retriever.search(query, top_k=candidate_k)
-        web = (
-            self.web_searcher.search(query, max_results=candidate_k)
-            if self.web_searcher is not None
-            else []
-        )
+        web = self.web_searcher.search(query, max_results=candidate_k)
         pool = wiki + web
         if self.reranker is None or not pool:
             pool.sort(key=lambda r: r.score, reverse=True)
