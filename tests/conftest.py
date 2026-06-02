@@ -1,10 +1,10 @@
 from datetime import datetime
 
 import numpy as np
-from numpy.random import Generator
 import pytest
+from numpy.random import Generator
 
-from muenster4you.lancedb import EMBEDDING_DIM, LanceDBWikiPage, WIKIPAGE_TABLE_NAME
+from muenster4you.lancedb import EMBEDDING_DIM, WIKIPAGE_TABLE_NAME, LanceDBWikiPage
 from muenster4you.retriever import LanceDBRetriever
 
 from . import FakeEmbedder

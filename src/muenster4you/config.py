@@ -1,7 +1,6 @@
 """Application configuration via Pydantic Settings."""
 
 from pathlib import Path
-from typing import List
 
 from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -52,7 +51,7 @@ class AppConfig(BaseSettings):
     tavily_search_depth: str = "basic"
     websearch_enabled: bool = False
     websearch_max_results: int = 5
-    websearch_site_filters: List[str] = Field(
+    websearch_site_filters: list[str] = Field(
         default_factory=lambda: [
             "allesmuenster.de",
             "am-hawerkamp.de",

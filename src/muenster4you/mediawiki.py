@@ -1,10 +1,11 @@
 """MediaWiki SQLite database access layer."""
 
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from sqlite3 import Row, connect
-from typing import Iterator, Self
+from typing import Self
 
 
 @dataclass
@@ -57,7 +58,7 @@ class SQLiteMediaWiki:
         """
         with self.conn as conn:
             cur = conn.cursor()
-            cur.row_factory = lambda cursor, row: RawMediaWikiPage(*row)
+            cur.row_factory = lambda _, row: RawMediaWikiPage(*row)
             yield from cur.execute(query, (namespace,))
 
     def get_page_content_by_id(
@@ -87,5 +88,5 @@ class SQLiteMediaWiki:
         """
         with self.conn as conn:
             cur = conn.cursor()
-            cur.row_factory = lambda cursor, row: MediaWikiPage.from_db_row(row)
+            cur.row_factory = lambda _, row: MediaWikiPage.from_db_row(row)
             return cur.execute(query, (page_id, namespace)).fetchone()

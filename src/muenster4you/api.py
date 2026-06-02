@@ -31,9 +31,7 @@ ConfigDep = Annotated[AppConfig, Depends(get_config)]
 
 @lru_cache
 def get_retriever(config: ConfigDep) -> LanceDBRetriever:
-    model = SentenceTransformer(
-        model_name_or_path=config.embedding_model, trust_remote_code=True
-    )
+    model = SentenceTransformer(model_name_or_path=config.embedding_model, trust_remote_code=True)
     embedder = SentenceTransformerEmbedder(model=model)
     return LanceDBRetriever(db_path=config.lancedb_fp, embedder=embedder)
 

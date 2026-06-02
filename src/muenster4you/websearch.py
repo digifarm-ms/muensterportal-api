@@ -7,7 +7,6 @@ from tavily import TavilyClient
 
 from muenster4you.types import RetrievalResult, RetrievalSource
 
-
 SearchDepth = Literal["basic", "advanced", "fast", "ultra-fast"]
 
 
