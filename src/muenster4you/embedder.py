@@ -21,4 +21,4 @@ class SentenceTransformerEmbedder(TextEmbedder):
     model: SentenceTransformer
 
     def encode(self, text: str) -> NDArray[np.float32]:
-        return self.model.encode(text, convert_to_numpy=True)
+        return self.model.encode(text, prompt_name="query", convert_to_numpy=True)
