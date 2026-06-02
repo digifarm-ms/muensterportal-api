@@ -5,6 +5,8 @@ from pathlib import Path
 from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from muenster4you.websearch import SearchDepth
+
 
 class AppConfig(BaseSettings):
     model_config = SettingsConfigDict(
@@ -44,12 +46,14 @@ class AppConfig(BaseSettings):
     chat_max_followups: int = 3
 
     # Tavily web search
-    tavily_api_key: str = Field(
-        default="",
-        validation_alias=AliasChoices("TAVILY_API_KEY"),
-    )
-    tavily_search_depth: str = "basic"
-    websearch_enabled: bool = False
+    tavily_api_key: str = Field(validation_alias=AliasChoices("TAVILY_API_KEY"))
+    # Tavily search depth — trades credits/latency for recall:
+    #   "basic"      (1 credit) — one NLP summary per URL, balanced.
+    #   "advanced"   (2 credits) — multiple snippets per URL, highest relevance.
+    #   "fast"       (1 credit) — multiple snippets, lower latency.
+    #   "ultra-fast" (1 credit) — one summary, lowest latency.
+    # https://docs.tavily.com/documentation/api-reference/endpoint/search
+    tavily_search_depth: SearchDepth = "basic"
     websearch_max_results: int = 5
     websearch_site_filters: list[str] = Field(
         default_factory=lambda: [
