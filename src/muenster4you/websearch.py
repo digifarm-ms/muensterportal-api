@@ -12,11 +12,18 @@ SearchDepth = Literal["basic", "advanced", "fast", "ultra-fast"]
 
 @dataclass
 class TavilySearcher:
-    """Web searcher using Tavily's structured include_domains filtering."""
+    """Web searcher using Tavily's structured include_domains filtering.
+
+    `site_filters` is passed verbatim to Tavily's `include_domains`. Entries
+    may be bare hostnames or include path prefixes (e.g.
+    `"de.wikipedia.org/wiki/Portal:Münster"`); Tavily honors path prefixes,
+    so curator path choices in the allowlist act as section-level filters.
+    """
 
     client: TavilyClient
     site_filters: list[str]
     search_depth: SearchDepth = "basic"
+    location_keyword: str = "Münster"
 
     def search(self, query: str, max_results: int = 20) -> list[RetrievalResult]:
         """
@@ -31,7 +38,7 @@ class TavilySearcher:
         """
 
         response = self.client.search(
-            query=query,
+            query=self._inject_location(query),
             include_domains=self.site_filters,
             max_results=max_results,
             search_depth=self.search_depth,
@@ -46,3 +53,23 @@ class TavilySearcher:
             )
             for item in response["results"]
         ]
+
+    def _inject_location(self, query: str) -> str:
+        """Append the location keyword if missing.
+
+        The chatbot is implicitly about Münster, but ~20% of user queries
+        don't repeat the city name. Without the keyword, Tavily can't tell
+        a "Krankenversicherung" question is local — and our allowlist is
+        not enough of a location signal on its own.
+        """
+        kw_lower = self.location_keyword.lower()
+        kw_ascii = (
+            kw_lower.replace("ü", "ue")
+            .replace("ö", "oe")
+            .replace("ä", "ae")
+            .replace("ß", "ss")
+        )
+        q_lower = query.lower()
+        if kw_lower in q_lower or kw_ascii in q_lower:
+            return query
+        return f"{query} {self.location_keyword}"
