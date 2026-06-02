@@ -46,21 +46,3 @@ class TavilySearcher:
             )
             for item in response["results"]
         ]
-
-
-if __name__ == "__main__":
-    import os
-
-    client = TavilyClient(api_key=os.getenv("TAVILY_API_KEY"))
-    searcher = TavilySearcher(
-        client=client,
-        site_filters=[
-            "muenster.org",
-            "muenster4you.de",
-            "stadt-muenster.de",
-            "muensterland.com",
-        ],
-    )
-    results = searcher.search("best restaurants in Münster", max_results=5)
-    for rank, result in enumerate(results, start=1):
-        print(f"{rank}. {result.url} - {result.content} [Score: {result.score}]")
