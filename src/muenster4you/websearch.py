@@ -1,5 +1,6 @@
 """Web search layer using Tavily (sanctioned API, free tier 1k credits/month)."""
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Literal
 
@@ -21,7 +22,7 @@ class TavilySearcher:
     """
 
     client: TavilyClient
-    site_filters: list[str]
+    site_filters: Sequence[str]
     search_depth: SearchDepth = "basic"
     location_keyword: str = "Münster"
 
@@ -39,7 +40,7 @@ class TavilySearcher:
 
         response = self.client.search(
             query=self._inject_location(query),
-            include_domains=self.site_filters,
+            include_domains=[*self.site_filters],
             max_results=max_results,
             search_depth=self.search_depth,
         )
