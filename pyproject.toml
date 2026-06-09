@@ -8,6 +8,12 @@ requires-python = ">=3.13"
 dependencies = [
     "fastapi>=0.104.0",
     "sentence-transformers>=5.2.0",
+    # gte-multilingual-reranker-base's trust_remote_code modeling.py was written
+    # against transformers 4.x. On 5.x the lazy/empty-weights loader leaves
+    # `register_buffer(persistent=False)` buffers uninitialized, producing
+    # garbage position_ids and OOB index errors. Pin until Alibaba ships a 5.x
+    # fix (or we move to a model without remote code).
+    "transformers>=4.41.0,<5.0.0",
     "uvicorn[standard]>=0.24.0",
     "polars>=0.20.0",
     "pyarrow>=15.0.0",
