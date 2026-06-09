@@ -13,6 +13,7 @@ class AppConfig(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
+        frozen=True,
     )
 
     # Paths
@@ -58,8 +59,8 @@ class AppConfig(BaseSettings):
     # Tavily `include_domains` honors path prefixes, so curated paths from
     # muenster-urls.txt are preserved verbatim instead of being collapsed to
     # bare hostnames. Keep this list in sync with muenster-urls.txt.
-    websearch_site_filters: list[str] = Field(
-        default_factory=lambda: [
+    websearch_site_filters: frozenset[str] = Field(
+        default_factory=lambda: frozenset({
             "allesmuenster.de",
             "am-hawerkamp.de",
             "amnesty-muenster-osnabrueck.de/gruppe/asylgruppe-muenster",
@@ -116,5 +117,5 @@ class AppConfig(BaseSettings):
             "wipdaf-deutschkurse-muenster.de",
             "wochenmarkt-muenster.de",
             "zanzu.de/de",
-        ]
+        })
     )

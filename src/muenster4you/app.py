@@ -83,8 +83,8 @@ def main():
 
         site_filters = st.multiselect(
             "Website-Filter",
-            options=config.websearch_site_filters,
-            default=config.websearch_site_filters,
+            options=sorted(config.websearch_site_filters),
+            default=sorted(config.websearch_site_filters),
             disabled=not websearch_enabled,
             help="Suche auf diese Domains beschränken (bis zu 300 möglich)",
         )
