@@ -38,23 +38,3 @@ class LanceDBMediaWiki:
             .when_not_matched_insert_all()
             .execute(pages)
         )
-
-    def search(self, query: str, limit: int = 5) -> list[RetrievalResult]:
-        rows = (
-            self.table.search(query)
-            .metric("cosine")
-            .select(["id", "title", "content"])
-            .limit(limit)
-            .to_list()
-        )
-        return [
-            RetrievalResult(
-                page_id=r["id"],
-                page_title=r["title"],
-                content_text=r["content"],
-                similarity_score=1.0 - r["_distance"],
-                page_len=len(r["content"]),
-                source="wiki",
-            )
-            for r in rows
-        ]
