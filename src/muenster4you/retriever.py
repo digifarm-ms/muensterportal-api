@@ -3,6 +3,7 @@
 from pathlib import Path
 from urllib.parse import quote
 
+import numpy as np
 from lancedb import connect
 from muenster4you.embedder import TextEmbedder
 from muenster4you.lancedb import WIKIPAGE_TABLE_NAME
@@ -30,6 +31,7 @@ class LanceDBRetriever:
                 score=1.0 - r["_distance"],
                 source=RetrievalSource.WIKI,
                 url=f"/wiki/{quote(r['title'].replace(' ', '_'))}",
+                embedding=np.asarray(r["embedding"], dtype=np.float32),
             )
             for r in results
         ]
