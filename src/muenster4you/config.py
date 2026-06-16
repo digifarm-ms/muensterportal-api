@@ -37,7 +37,6 @@ class AppConfig(BaseSettings):
     default_max_tokens: int = 2048
 
     # Retrieval & reranking
-    reranker_model: str = "Alibaba-NLP/gte-multilingual-reranker-base"
     rerank_top_k: int = 5
     retrieval_oversample_factor: int = 4
     min_similarity_score: float = 0.3

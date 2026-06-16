@@ -12,7 +12,7 @@ from muenster4you.config import AppConfig
 from muenster4you.embedder import SentenceTransformerEmbedder
 from muenster4you.rag.generation import RAGGenerator
 from muenster4you.rag.sessions import ChatSessionManager
-from muenster4you.reranker import CrossEncoderReranker, Reranker
+from muenster4you.reranker import BiEncoderReranker, Reranker
 from muenster4you.retrieval import RetrievalOrchestrator
 from muenster4you.retriever import LanceDBRetriever
 from muenster4you.types import RetrievalResult
@@ -30,8 +30,15 @@ ConfigDep = Annotated[AppConfig, Depends(get_config)]
 
 
 @lru_cache
-def get_retriever(config: ConfigDep) -> LanceDBRetriever:
-    model = SentenceTransformer(model_name_or_path=config.embedding_model, trust_remote_code=True)
+def get_embedding_model(config: ConfigDep) -> SentenceTransformer:
+    return SentenceTransformer(model_name_or_path=config.embedding_model, trust_remote_code=True)
+
+
+EmbeddingModelDep = Annotated[SentenceTransformer, Depends(get_embedding_model)]
+
+
+@lru_cache
+def get_retriever(config: ConfigDep, model: EmbeddingModelDep) -> LanceDBRetriever:
     embedder = SentenceTransformerEmbedder(model=model)
     return LanceDBRetriever(db_path=config.lancedb_fp, embedder=embedder)
 
@@ -53,8 +60,8 @@ WebSearcherDep = Annotated[TavilySearcher, Depends(get_web_searcher)]
 
 
 @lru_cache
-def get_reranker(config: ConfigDep) -> Reranker:
-    return CrossEncoderReranker(model_id=config.reranker_model)
+def get_reranker(model: EmbeddingModelDep) -> Reranker:
+    return BiEncoderReranker(model=model)
 
 
 RerankerDep = Annotated[Reranker, Depends(get_reranker)]
@@ -103,9 +110,22 @@ app = FastAPI(title="Muenster4You API", version="0.1.0")
 # --- Models ---
 
 
+class SourceItem(BaseModel):
+    """Wire-format source. Excludes the internal `embedding` vector."""
+
+    content: str
+    score: float
+    source: str
+    url: str
+
+    @classmethod
+    def from_result(cls, r: RetrievalResult) -> "SourceItem":
+        return cls(content=r.content, score=r.score, source=str(r.source), url=r.url)
+
+
 class SearchResponse(BaseModel):
     query: str | None
-    results: list[RetrievalResult] = []
+    results: list[SourceItem] = []
     message: str | None = None
 
 
@@ -123,7 +143,7 @@ class ChatMessage(BaseModel):
 class ChatResponse(BaseModel):
     conversation_id: str
     answer: str
-    sources: list[RetrievalResult]
+    sources: list[SourceItem]
     history: list[ChatMessage]
     remaining_followups: int
 
@@ -146,7 +166,7 @@ async def search(
     query: str = Query(..., min_length=3, description="Search query string"),
 ) -> SearchResponse:
     results = orchestrator.retrieve(query)
-    return SearchResponse(query=query, results=results)
+    return SearchResponse(query=query, results=[SourceItem.from_result(r) for r in results])
 
 
 @app.post("/chat")
@@ -194,7 +214,7 @@ async def chat(
     return ChatResponse(
         conversation_id=conversation_id,
         answer=answer,
-        sources=results,
+        sources=[SourceItem.from_result(r) for r in results],
         history=history,
         remaining_followups=session_manager.remaining_followups(conversation_id),
     )
