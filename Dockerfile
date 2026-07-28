@@ -8,7 +8,10 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 # Copy dependency files and source code
 COPY pyproject.toml uv.lock README.md ./
 COPY src/ ./src/
-COPY wiki.sqlite ./
+# NOTE: wiki.sqlite is deliberately NOT copied into the image. It is a full
+# MediaWiki dump containing personal data (user emails, real names, password
+# hashes). The API serves only from LanceDB (volume-mounted at /app/lancedb);
+# ingestion runs on the host against the live MediaWiki SQLite file.
 COPY data/ ./data/
 
 # Install dependencies and the package

@@ -34,3 +34,14 @@ htmlcov/
 # OS
 .DS_Store
 Thumbs.db
+
+# MediaWiki dumps — personal data (user emails, real names, password hashes).
+# Must never enter the build context, let alone an image layer.
+wiki.sqlite
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+my_wiki.sqlite*
+mediawiki-*/
+mediawiki-*.tar.gz

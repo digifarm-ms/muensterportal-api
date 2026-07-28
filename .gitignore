@@ -11,6 +11,16 @@ wheels/
 
 # Data files (wiki_embeddings.parquet is tracked for deployment)
 
+# MediaWiki dumps — contain personal data (user emails, real names, password
+# hashes). Never commit these. Keep local copies out of the index and out of
+# the Docker build context (see .dockerignore).
+wiki.sqlite
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+my_wiki.sqlite*
+
 # Environment
 .env
 
