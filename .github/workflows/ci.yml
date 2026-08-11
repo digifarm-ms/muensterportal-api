@@ -20,10 +20,14 @@ jobs:
           script: |
             cd muensterportal-api
 
-            git reset --hard
+            # Fetch + hard reset rather than pull. A `git pull` merges, so it
+            # fails outright ("refusing to merge unrelated histories") whenever
+            # main has been rewritten -- as it was by the wiki.sqlite history
+            # purge. Resetting to the fetched tip tracks main unconditionally.
+            git fetch origin main
+            git reset --hard FETCH_HEAD
             git clean -fd
 
-            git pull origin main
             docker compose pull
             docker compose build
             docker compose up -d
