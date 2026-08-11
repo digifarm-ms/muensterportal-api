@@ -21,6 +21,12 @@ wiki.sqlite
 *.sqlite-shm
 my_wiki.sqlite*
 
+# Incident documentation stays OUT of this public repo. The wiki.sqlite runbook
+# named the affected data subjects and their email addresses, so committing it
+# re-published, as plain text, the personal data the incident was about. It is
+# kept locally at ~/backups/m4u-incident-<date>/ instead.
+docs/incident-*.md
+
 # Environment
 .env
 
