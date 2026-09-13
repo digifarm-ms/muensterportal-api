@@ -24,9 +24,24 @@ class LanceDBWikiPage(LanceModel):
 class LanceDBMediaWiki:
     def __init__(self, path: Path) -> None:
         self.db = connect(path)
-        self.table = self.db.create_table(
-            WIKIPAGE_TABLE_NAME, schema=LanceDBWikiPage.to_arrow_schema(), exist_ok=True
-        )
+        schema = LanceDBWikiPage.to_arrow_schema()
+        if WIKIPAGE_TABLE_NAME in self.db.list_tables().tables:
+            self.table = self.db.open_table(WIKIPAGE_TABLE_NAME)
+            self._reconcile_schema(schema)
+        else:
+            self.table = self.db.create_table(WIKIPAGE_TABLE_NAME, schema=schema)
+
+    def _reconcile_schema(self, expected) -> None:
+        """Drop columns the model no longer has; refuse any other drift."""
+        existing = self.table.schema
+        extra = [name for name in existing.names if name not in expected.names]
+        if extra:
+            self.table.drop_columns(extra)
+            existing = self.table.schema
+        if not existing.equals(expected, check_metadata=False):
+            raise ValueError(
+                f"table {WIKIPAGE_TABLE_NAME} has schema\n{existing}\nbut the model expects\n{expected}"
+            )
 
     def upsert_pages(self, pages: list[WikiPage]) -> None:
         if len(pages) == 0:
