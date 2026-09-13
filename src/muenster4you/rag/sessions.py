@@ -15,6 +15,7 @@ class ConversationSession:
     id: str
     messages: list[dict] = field(default_factory=list)
     sources: list[RetrievalResult] = field(default_factory=list)
+    language: str | None = None
     turn_count: int = 0
     created_at: float = field(default_factory=time.time)
     last_active: float = field(default_factory=time.time)
@@ -45,16 +46,9 @@ class ChatSessionManager:
             return None
         return session
 
-    def set_system_message(self, session_id: str, content: str) -> None:
+    def add_user_message(self, session_id: str, content: str, language: str) -> None:
         session = self._sessions[session_id]
-        system_msg = {"role": "system", "content": content}
-        if session.messages and session.messages[0]["role"] == "system":
-            session.messages[0] = system_msg
-        else:
-            session.messages.insert(0, system_msg)
-
-    def add_user_message(self, session_id: str, content: str) -> None:
-        session = self._sessions[session_id]
+        session.language = language
         session.messages.append({"role": "user", "content": content})
         session.turn_count += 1
         session.last_active = time.time()

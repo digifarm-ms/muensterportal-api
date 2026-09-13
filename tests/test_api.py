@@ -67,6 +67,7 @@ def test_chat_endpoint_answers_with_injected_model(test_client: TestClient) -> N
     body = response.json()
     assert response.status_code == 200
     assert body["answer"] == "Testantwort"
+    assert body["language"] == "Deutsch"
     assert [m["role"] for m in body["history"]] == ["user", "assistant"]
     assert len(body["sources"]) == 2
 
@@ -83,9 +84,22 @@ def test_chat_endpoint_continues_conversation(test_client: TestClient) -> None:
     assert second["remaining_followups"] == first["remaining_followups"] - 1
 
 
-def test_chat_endpoint_passes_language_into_system_prompt(test_client: TestClient) -> None:
-    response = test_client.post(
-        "/chat", json={"message": "Where is the Aasee?", "language": "Englisch"}
-    )
+def test_chat_endpoint_detects_language_and_keeps_it_for_short_followups(
+    test_client: TestClient,
+) -> None:
+    first = test_client.post("/chat", json={"message": "Where can I find the Aasee?"}).json()
 
-    assert response.status_code == 200
+    second = test_client.post(
+        "/chat", json={"message": "ok", "conversation_id": first["conversation_id"]}
+    ).json()
+
+    assert first["language"] == "Englisch"
+    assert second["language"] == "Englisch"
+
+
+def test_chat_endpoint_prefers_explicit_language(test_client: TestClient) -> None:
+    body = test_client.post(
+        "/chat", json={"message": "Wo ist der Aasee?", "language": "Türkisch"}
+    ).json()
+
+    assert body["language"] == "Türkisch"

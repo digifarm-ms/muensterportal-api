@@ -26,6 +26,7 @@ dependencies = [
     "mistralai>=2.10.0",
     "tavily>=1.1.0",
     "pydantic-ai-slim>=2.43,<3",
+    "fast-langdetect>=1.0.1",
 ]
 
 [dependency-groups]

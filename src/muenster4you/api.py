@@ -11,8 +11,9 @@ from tavily import TavilyClient
 
 from muenster4you.config import AppConfig
 from muenster4you.embedder import SentenceTransformerEmbedder
+from muenster4you.language import detect_language
 from muenster4you.llm import build_model
-from muenster4you.rag.generation import DEFAULT_LANGUAGE, RAGGenerator
+from muenster4you.rag.generation import RAGGenerator
 from muenster4you.rag.sessions import ChatSessionManager
 from muenster4you.reranker import BiEncoderReranker, Reranker
 from muenster4you.retrieval import RetrievalOrchestrator
@@ -146,7 +147,7 @@ class ChatRequest(BaseModel):
     message: str
     conversation_id: str | None = None
     temperature: float = Field(default=0.7, ge=0.0, le=1.0)
-    language: str = Field(default=DEFAULT_LANGUAGE, min_length=2, max_length=40)
+    language: str | None = Field(default=None, min_length=2, max_length=40)
 
 
 class ChatMessage(BaseModel):
@@ -156,6 +157,7 @@ class ChatMessage(BaseModel):
 
 class ChatResponse(BaseModel):
     conversation_id: str
+    language: str
     answer: str
     sources: list[SourceItem]
     history: list[ChatMessage]
@@ -202,8 +204,7 @@ async def chat(
     if is_new:
         results = orchestrator.retrieve(req.message)
         conversation_id = session_manager.create_session(sources=results)
-        system_msg = generator.build_system_message(results, language=req.language)
-        session_manager.set_system_message(conversation_id, system_msg["content"])
+        previous_language = None
     else:
         assert session is not None and req.conversation_id is not None
         conversation_id = req.conversation_id
@@ -213,20 +214,22 @@ async def chat(
                 detail="Maximale Anzahl an Rückfragen erreicht. Bitte starte eine neue Unterhaltung.",
             )
         results = session.sources
+        previous_language = session.language
 
-    session_manager.add_user_message(conversation_id, req.message)
+    language = req.language or detect_language(req.message, previous=previous_language)
+    session_manager.add_user_message(conversation_id, req.message, language=language)
     messages = session_manager.get_messages(conversation_id)
-    answer = await generator.chat(messages, temperature=req.temperature)
+    answer = await generator.chat(messages, results, temperature=req.temperature, language=language)
     session_manager.add_assistant_message(conversation_id, answer)
 
     history = [
         ChatMessage(role=m["role"], content=m["content"])
         for m in session_manager.get_messages(conversation_id)
-        if m["role"] != "system"
     ]
 
     return ChatResponse(
         conversation_id=conversation_id,
+        language=language,
         answer=answer,
         sources=[SourceItem.from_result(r) for r in results],
         history=history,

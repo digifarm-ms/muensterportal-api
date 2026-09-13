@@ -5,7 +5,6 @@ from pydantic_ai.messages import (
     ModelMessage,
     ModelRequest,
     ModelResponse,
-    SystemPromptPart,
     TextPart,
     UserPromptPart,
 )
@@ -41,10 +40,12 @@ class _SpyModel:
     reply: str = "Antwort"
     requests: list[list[ModelMessage]] = field(default_factory=list)
     settings: list[dict] = field(default_factory=list)
+    instructions: list[str | None] = field(default_factory=list)
 
     def _respond(self, messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
         self.requests.append(messages)
         self.settings.append(dict(info.model_settings or {}))
+        self.instructions.append(info.instructions)
         return ModelResponse(parts=[TextPart(content=self.reply)])
 
     def model(self) -> FunctionModel:
@@ -84,7 +85,6 @@ def test_format_context_truncates_long_content():
 def test_split_conversation_maps_roles_to_history_and_prompt():
     history, prompt = split_conversation(
         [
-            {"role": "system", "content": "sys"},
             {"role": "user", "content": "erste Frage"},
             {"role": "assistant", "content": "erste Antwort"},
             {"role": "user", "content": "zweite Frage"},
@@ -93,19 +93,13 @@ def test_split_conversation_maps_roles_to_history_and_prompt():
 
     assert prompt == "zweite Frage"
     assert [type(m) for m in history] == [ModelRequest, ModelResponse]
-    assert [type(p) for p in history[0].parts] == [SystemPromptPart, UserPromptPart]
+    assert history[0].parts[0].content == "erste Frage"
     assert history[1].parts == [TextPart(content="erste Antwort")]
 
 
-def test_split_conversation_keeps_lone_system_message_in_history():
-    history, prompt = split_conversation(
-        [{"role": "system", "content": "sys"}, {"role": "user", "content": "Frage"}]
-    )
-
-    assert prompt == "Frage"
-    (request,) = history
-    assert isinstance(request, ModelRequest)
-    assert [(type(p), p.content) for p in request.parts] == [(SystemPromptPart, "sys")]
+def test_split_conversation_rejects_unknown_role():
+    with pytest.raises(ValueError):
+        split_conversation([{"role": "system", "content": "x"}, {"role": "user", "content": "q"}])
 
 
 def test_split_conversation_rejects_trailing_assistant_message():
@@ -119,30 +113,19 @@ def test_generate_embeds_context_and_query_in_prompt():
     answer = _generator(spy.model()).generate("Wo liegt der Aasee?", [WIKI_DOC])
 
     assert answer == "Der Aasee liegt im Süden."
-    prompt = _user_prompt(spy.requests[0][-1])
-    assert "Benutzerfrage: Wo liegt der Aasee?" in prompt
-    assert "[Dokument 1 (Wiki): Aasee (See)]" in prompt
-    assert WIKI_DOC.content in prompt
+    assert _user_prompt(spy.requests[0][-1]) == "Wo liegt der Aasee?"
+    instructions = spy.instructions[0] or ""
+    assert "[Dokument 1 (Wiki): Aasee (See)]" in instructions
+    assert WIKI_DOC.content in instructions
+    assert "Antworte auf Deutsch." in instructions
 
 
-def test_generate_defaults_to_german_and_accepts_other_languages():
+def test_generate_puts_requested_language_into_instructions():
     spy = _SpyModel()
-    generator = _generator(spy.model())
 
-    generator.generate("q", [])
-    generator.generate("q", [], language="Arabisch")
+    _generator(spy.model()).generate("q", [], language="Arabisch")
 
-    assert "Antworte auf Deutsch." in _user_prompt(spy.requests[0][-1])
-    assert "Antworte auf Arabisch." in _user_prompt(spy.requests[1][-1])
-
-
-def test_system_message_carries_language_and_history_rule():
-    message = _generator(TestModel()).build_system_message([WIKI_DOC], language="Türkisch")
-
-    assert message["role"] == "system"
-    assert "Antworte auf Türkisch." in message["content"]
-    assert "Gesprächsverlauf" in message["content"]
-    assert WIKI_DOC.content in message["content"]
+    assert "Antworte auf Arabisch." in (spy.instructions[0] or "")
 
 
 def test_generate_uses_defaults_and_per_call_overrides():
@@ -167,26 +150,26 @@ def test_generate_returns_error_message_when_model_fails():
     assert answer == ERROR_MESSAGE.format(error="kaputt")
 
 
-async def test_chat_sends_history_and_prompt():
+async def test_chat_sends_history_prompt_and_context():
     spy = _SpyModel(reply="Zweite Antwort")
-    generator = _generator(spy.model())
     messages = [
-        generator.build_system_message([WIKI_DOC]),
         {"role": "user", "content": "erste Frage"},
         {"role": "assistant", "content": "erste Antwort"},
         {"role": "user", "content": "zweite Frage"},
     ]
 
-    answer = await generator.chat(messages, temperature=0.1)
+    answer = await _generator(spy.model()).chat(
+        messages, [WIKI_DOC], temperature=0.1, language="Türkisch"
+    )
 
     assert answer == "Zweite Antwort"
     (request,) = spy.requests
     assert [type(m) for m in request] == [ModelRequest, ModelResponse, ModelRequest]
-    system_part = request[0].parts[0]
-    assert isinstance(system_part, SystemPromptPart)
-    assert WIKI_DOC.content in system_part.content
     assert _user_prompt(request[0]) == "erste Frage"
     assert _user_prompt(request[2]) == "zweite Frage"
+    instructions = spy.instructions[0] or ""
+    assert WIKI_DOC.content in instructions
+    assert "Antworte auf Türkisch." in instructions
     assert spy.settings[0]["temperature"] == 0.1
 
 
@@ -194,7 +177,7 @@ async def test_chat_returns_error_message_when_model_fails():
     def explode(_messages, _info):
         raise RuntimeError("kaputt")
 
-    answer = await _generator(FunctionModel(explode)).chat([{"role": "user", "content": "q"}])
+    answer = await _generator(FunctionModel(explode)).chat([{"role": "user", "content": "q"}], [])
 
     assert answer == ERROR_MESSAGE.format(error="kaputt")
 
