@@ -125,6 +125,26 @@ def test_generate_embeds_context_and_query_in_prompt():
     assert WIKI_DOC.content in prompt
 
 
+def test_generate_defaults_to_german_and_accepts_other_languages():
+    spy = _SpyModel()
+    generator = _generator(spy.model())
+
+    generator.generate("q", [])
+    generator.generate("q", [], language="Arabisch")
+
+    assert "Antworte auf Deutsch." in _user_prompt(spy.requests[0][-1])
+    assert "Antworte auf Arabisch." in _user_prompt(spy.requests[1][-1])
+
+
+def test_system_message_carries_language_and_history_rule():
+    message = _generator(TestModel()).build_system_message([WIKI_DOC], language="Türkisch")
+
+    assert message["role"] == "system"
+    assert "Antworte auf Türkisch." in message["content"]
+    assert "Gesprächsverlauf" in message["content"]
+    assert WIKI_DOC.content in message["content"]
+
+
 def test_generate_uses_defaults_and_per_call_overrides():
     spy = _SpyModel()
     generator = _generator(spy.model(), temperature=0.2, max_tokens=100)

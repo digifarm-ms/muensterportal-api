@@ -12,7 +12,7 @@ from tavily import TavilyClient
 from muenster4you.config import AppConfig
 from muenster4you.embedder import SentenceTransformerEmbedder
 from muenster4you.llm import build_model
-from muenster4you.rag.generation import RAGGenerator
+from muenster4you.rag.generation import DEFAULT_LANGUAGE, RAGGenerator
 from muenster4you.rag.sessions import ChatSessionManager
 from muenster4you.reranker import BiEncoderReranker, Reranker
 from muenster4you.retrieval import RetrievalOrchestrator
@@ -146,6 +146,7 @@ class ChatRequest(BaseModel):
     message: str
     conversation_id: str | None = None
     temperature: float = Field(default=0.7, ge=0.0, le=1.0)
+    language: str = Field(default=DEFAULT_LANGUAGE, min_length=2, max_length=40)
 
 
 class ChatMessage(BaseModel):
@@ -201,7 +202,7 @@ async def chat(
     if is_new:
         results = orchestrator.retrieve(req.message)
         conversation_id = session_manager.create_session(sources=results)
-        system_msg = generator.build_system_message(results)
+        system_msg = generator.build_system_message(results, language=req.language)
         session_manager.set_system_message(conversation_id, system_msg["content"])
     else:
         assert session is not None and req.conversation_id is not None

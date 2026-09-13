@@ -81,3 +81,11 @@ def test_chat_endpoint_continues_conversation(test_client: TestClient) -> None:
     assert second["conversation_id"] == first["conversation_id"]
     assert [m["role"] for m in second["history"]] == ["user", "assistant", "user", "assistant"]
     assert second["remaining_followups"] == first["remaining_followups"] - 1
+
+
+def test_chat_endpoint_passes_language_into_system_prompt(test_client: TestClient) -> None:
+    response = test_client.post(
+        "/chat", json={"message": "Where is the Aasee?", "language": "Englisch"}
+    )
+
+    assert response.status_code == 200

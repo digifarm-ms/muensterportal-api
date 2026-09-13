@@ -17,36 +17,40 @@ from pydantic_ai.settings import ModelSettings
 
 from ..types import RetrievalResult, RetrievalSource
 
-# German RAG prompt template (single-turn)
-GERMAN_RAG_PROMPT = """Du bist ein hilfreicher Assistent für Informationen über die Stadt Münster in Deutschland. Deine Aufgabe ist es, Fragen basierend auf den bereitgestellten Dokumenten zu beantworten.
+ROLE = (
+    "Du bist der Assistent von Münster4You. Du hilfst Menschen, die in Münster leben oder "
+    "neu ankommen, mit Informationen zu Behörden, Beratung, Sprache, Arbeit, Wohnen, "
+    "Gesundheit und Freizeit in Münster."
+)
+
+RULES = """Regeln:
+- Antworte auf {language}. Deutsche Eigennamen (Behörden, Einrichtungen, Straßen, Programme) bleiben unverändert im Original.
+- Nutze ausschließlich die Kontext-Dokumente. Erfinde keine Adressen, Telefonnummern, E-Mail-Adressen, Links, Öffnungszeiten oder Fristen; gib solche Angaben genau so wieder, wie sie im Dokument stehen.
+- Wenn die Dokumente die Frage nicht beantworten, sage das klar und nenne höchstens eine Stelle aus den Dokumenten, die weiterhelfen könnte.
+- Belege jede Aussage mit der Nummer des Dokuments in eckigen Klammern, zum Beispiel [1] oder [2][4]. Keine anderen Zitierformen, keine Links.
+- Antworte kurz und konkret, höchstens etwa 120 Wörter.{extra_rules}"""
+
+GERMAN_RAG_PROMPT = f"""{ROLE}
 
 Kontext-Dokumente:
-{context}
+{{context}}
 
-Benutzerfrage: {query}
+{RULES}
 
-Anweisungen:
-- Antworte auf Deutsch
-- Basiere deine Antwort ausschließlich auf den bereitgestellten Dokumenten
-- Sei präzise und hilfreich
-- Wenn die Information nicht in den Dokumenten zu finden ist, sage das ehrlich
-- Zitiere relevante Dokumente wenn möglich (z.B. "Laut [Dokument: Titel]...")
+Benutzerfrage: {{query}}
 
 Antwort:"""
 
-# German RAG system prompt for multi-turn chat
-GERMAN_RAG_CHAT_SYSTEM_PROMPT = """Du bist ein hilfreicher Assistent für Informationen über die Stadt Münster in Deutschland. Deine Aufgabe ist es, Fragen basierend auf den bereitgestellten Dokumenten zu beantworten.
+GERMAN_RAG_CHAT_SYSTEM_PROMPT = f"""{ROLE}
 
-Anweisungen:
-- Antworte auf Deutsch
-- Basiere deine Antwort ausschließlich auf den bereitgestellten Dokumenten
-- Sei präzise und hilfreich
-- Wenn die Information nicht in den Dokumenten zu finden ist, sage das ehrlich
-- Zitiere relevante Dokumente wenn möglich (z.B. "Laut [Dokument: Titel]...")
-- Berücksichtige den bisherigen Gesprächsverlauf bei deinen Antworten
+{RULES}
 
 Kontext-Dokumente:
-{context}"""
+{{context}}"""
+
+CHAT_EXTRA_RULES = "\n- Berücksichtige den bisherigen Gesprächsverlauf."
+
+DEFAULT_LANGUAGE = "Deutsch"
 
 ERROR_MESSAGE = "Entschuldigung, es gab einen Fehler bei der Generierung der Antwort: {error}"
 
@@ -97,6 +101,12 @@ def split_conversation(messages: list[dict]) -> tuple[list[ModelMessage], str]:
     return history, last["content"]
 
 
+def build_prompt(query: str, context_docs: list[RetrievalResult], language: str) -> str:
+    return GERMAN_RAG_PROMPT.format(
+        context=format_context(context_docs), query=query, language=language, extra_rules=""
+    )
+
+
 def _settings(temperature: float | None, max_tokens: int | None) -> ModelSettings | None:
     settings: ModelSettings = {}
     if temperature is not None:
@@ -122,16 +132,23 @@ class RAGGenerator:
         context_docs: list[RetrievalResult],
         temperature: float | None = None,
         max_tokens: int | None = None,
+        language: str = DEFAULT_LANGUAGE,
     ) -> str:
-        prompt = GERMAN_RAG_PROMPT.format(context=format_context(context_docs), query=query)
+        prompt = build_prompt(query, context_docs, language)
         try:
             result = self._agent.run_sync(prompt, model_settings=_settings(temperature, max_tokens))
             return result.output
         except Exception as e:
             return ERROR_MESSAGE.format(error=e)
 
-    def build_system_message(self, context_docs: list[RetrievalResult]) -> dict:
-        content = GERMAN_RAG_CHAT_SYSTEM_PROMPT.format(context=format_context(context_docs))
+    def build_system_message(
+        self, context_docs: list[RetrievalResult], language: str = DEFAULT_LANGUAGE
+    ) -> dict:
+        content = GERMAN_RAG_CHAT_SYSTEM_PROMPT.format(
+            context=format_context(context_docs),
+            language=language,
+            extra_rules=CHAT_EXTRA_RULES,
+        )
         return {"role": "system", "content": content}
 
     async def chat(
@@ -157,8 +174,9 @@ class RAGGenerator:
         context_docs: list[RetrievalResult],
         temperature: float | None = None,
         max_tokens: int | None = None,
+        language: str = DEFAULT_LANGUAGE,
     ) -> Iterator[str]:
-        prompt = GERMAN_RAG_PROMPT.format(context=format_context(context_docs), query=query)
+        prompt = build_prompt(query, context_docs, language)
         try:
             result = self._agent.run_stream_sync(
                 prompt, model_settings=_settings(temperature, max_tokens)
