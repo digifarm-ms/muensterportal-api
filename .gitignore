@@ -33,3 +33,6 @@ docs/incident-*.md
 # MediaWiki download
 mediawiki-1.44.0/
 mediawiki-1.44.0.tar.gz
+
+# Local vector store, rebuilt by `python -m muenster4you.ingest`
+lancedb/

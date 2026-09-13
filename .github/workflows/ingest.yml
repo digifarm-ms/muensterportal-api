@@ -27,7 +27,7 @@ jobs:
             trap 'rm -f "$SQLITE_TMP"' EXIT
 
             cd "$REPO_DIR"
-            uv sync --frozen
+            uv sync --frozen --no-default-groups
 
             cp "$SQLITE_SRC" "$SQLITE_TMP"
 
