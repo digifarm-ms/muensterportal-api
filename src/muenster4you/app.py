@@ -7,6 +7,7 @@ import streamlit as st
 
 from muenster4you.config import AppConfig
 from muenster4you.lancedb import LanceDBMediaWiki
+from muenster4you.llm import build_model
 from muenster4you.rag.generation import RAGGenerator
 from muenster4you.types import RetrievalSource
 from muenster4you.websearch import TavilySearcher
@@ -34,7 +35,11 @@ def load_retriever():
 @st.cache_resource
 def load_generator():
     """Load and cache the generator."""
-    return RAGGenerator(config)
+    return RAGGenerator(
+        build_model(config),
+        default_temperature=config.default_temperature,
+        default_max_tokens=config.default_max_tokens,
+    )
 
 
 def get_web_searcher(site_filters: list[str], max_results: int) -> TavilySearcher:

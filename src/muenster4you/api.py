@@ -5,11 +5,13 @@ from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field
+from pydantic_ai.models import Model
 from sentence_transformers import SentenceTransformer
 from tavily import TavilyClient
 
 from muenster4you.config import AppConfig
 from muenster4you.embedder import SentenceTransformerEmbedder
+from muenster4you.llm import build_model
 from muenster4you.rag.generation import RAGGenerator
 from muenster4you.rag.sessions import ChatSessionManager
 from muenster4you.reranker import BiEncoderReranker, Reranker
@@ -86,8 +88,19 @@ OrchestratorDep = Annotated[RetrievalOrchestrator, Depends(get_orchestrator)]
 
 
 @lru_cache
-def get_generator(config: ConfigDep) -> RAGGenerator:
-    return RAGGenerator(config)
+def get_model(config: ConfigDep) -> Model:
+    return build_model(config)
+
+
+ModelDep = Annotated[Model, Depends(get_model)]
+
+
+def get_generator(config: ConfigDep, model: ModelDep) -> RAGGenerator:
+    return RAGGenerator(
+        model,
+        default_temperature=config.default_temperature,
+        default_max_tokens=config.default_max_tokens,
+    )
 
 
 GeneratorDep = Annotated[RAGGenerator, Depends(get_generator)]
@@ -202,7 +215,7 @@ async def chat(
 
     session_manager.add_user_message(conversation_id, req.message)
     messages = session_manager.get_messages(conversation_id)
-    answer = generator.chat(messages, temperature=req.temperature)
+    answer = await generator.chat(messages, temperature=req.temperature)
     session_manager.add_assistant_message(conversation_id, answer)
 
     history = [

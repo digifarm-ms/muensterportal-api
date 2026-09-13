@@ -1,11 +1,20 @@
-"""Generation layer using OpenAI-compatible API for RAG responses."""
+"""Generation layer for RAG responses."""
 
 from collections.abc import Iterator
 from urllib.parse import unquote
 
-from openai import OpenAI
+from pydantic_ai import Agent
+from pydantic_ai.messages import (
+    ModelMessage,
+    ModelRequest,
+    ModelResponse,
+    SystemPromptPart,
+    TextPart,
+    UserPromptPart,
+)
+from pydantic_ai.models import Model
+from pydantic_ai.settings import ModelSettings
 
-from ..config import AppConfig
 from ..types import RetrievalResult, RetrievalSource
 
 # German RAG prompt template (single-turn)
@@ -39,122 +48,73 @@ Anweisungen:
 Kontext-Dokumente:
 {context}"""
 
+ERROR_MESSAGE = "Entschuldigung, es gab einen Fehler bei der Generierung der Antwort: {error}"
+
+
+def format_context(results: list[RetrievalResult]) -> str:
+    context_parts = []
+
+    for i, result in enumerate(results, 1):
+        content = result.content
+        if len(content) > 2000:
+            content = content[:2000] + "..."
+
+        is_web = result.source == RetrievalSource.WEBSEARCH
+        source_label = "Web" if is_web else "Wiki"
+        title = result.url if is_web else unquote(result.url.rsplit("/", 1)[-1]).replace("_", " ")
+        header = f"[Dokument {i} ({source_label}): {title}]"
+
+        if is_web and result.url:
+            header += f"\nURL: {result.url}"
+
+        context_parts.append(f"{header}\n{content}\n")
+
+    return "\n".join(context_parts)
+
+
+def split_conversation(messages: list[dict]) -> tuple[list[ModelMessage], str]:
+    """Split role/content dicts into pydantic-ai history plus the final user prompt."""
+    *earlier, last = messages
+    if last["role"] != "user":
+        raise ValueError("conversation must end with a user message")
+
+    history: list[ModelMessage] = []
+    pending: list[SystemPromptPart | UserPromptPart] = []
+    for message in earlier:
+        match message["role"]:
+            case "system":
+                pending.append(SystemPromptPart(content=message["content"]))
+            case "user":
+                pending.append(UserPromptPart(content=message["content"]))
+                history.append(ModelRequest(parts=pending))
+                pending = []
+            case "assistant":
+                history.append(ModelResponse(parts=[TextPart(content=message["content"])]))
+            case role:
+                raise ValueError(f"unknown role: {role}")
+    if pending:
+        history.append(ModelRequest(parts=pending))
+    return history, last["content"]
+
+
+def _settings(temperature: float | None, max_tokens: int | None) -> ModelSettings | None:
+    settings: ModelSettings = {}
+    if temperature is not None:
+        settings["temperature"] = temperature
+    if max_tokens is not None:
+        settings["max_tokens"] = max_tokens
+    return settings or None
+
 
 class RAGGenerator:
-    """Generator for RAG responses using OpenAI-compatible APIs (Ollama or Mistral)."""
-
-    def __init__(self, config: AppConfig):
-        self.provider = config.llm_provider
-        self.default_temperature = config.default_temperature
-        self.default_max_tokens = config.default_max_tokens
-
-        if self.provider == "mistral":
-            self.model_name = config.mistral_model
-            self.client = OpenAI(
-                base_url="https://api.mistral.ai/v1",
-                api_key=config.mistral_api_key,
-            )
-        else:
-            self.model_name = config.generation_model
-            self.client = OpenAI(
-                base_url=f"{config.ollama_url}/v1",
-                api_key="ollama",
-            )
-
-        print(
-            f"RAG Generator initialized with provider={self.provider}, model={self.model_name}"
+    def __init__(self, model: Model, default_temperature: float, default_max_tokens: int):
+        self.model_name = model.model_name
+        self._agent = Agent(
+            model,
+            model_settings=ModelSettings(
+                temperature=default_temperature, max_tokens=default_max_tokens
+            ),
         )
-
-    def _format_context(self, results: list[RetrievalResult]) -> str:
-        """Format retrieved documents into context string."""
-        context_parts = []
-
-        for i, result in enumerate(results, 1):
-            content = result.content
-            if len(content) > 2000:
-                content = content[:2000] + "..."
-
-            is_web = result.source == RetrievalSource.WEBSEARCH
-            source_label = "Web" if is_web else "Wiki"
-            if is_web:
-                title = result.url
-            else:
-                title = unquote(result.url.rsplit("/", 1)[-1]).replace("_", " ")
-            header = f"[Dokument {i} ({source_label}): {title}]"
-
-            if is_web and result.url:
-                header += f"\nURL: {result.url}"
-
-            context_parts.append(f"{header}\n{content}\n")
-
-        return "\n".join(context_parts)
-
-    def _call(self, prompt: str, temperature: float, max_tokens: int) -> str:
-        """Single-turn generation: send a prompt, get a text response."""
-        if self.provider == "mistral":
-            response = self.client.chat.completions.create(
-                model=self.model_name,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=temperature,
-                max_tokens=max_tokens,
-            )
-            return response.choices[0].message.content or ""
-        else:
-            response = self.client.responses.create(
-                model=self.model_name,
-                input=prompt,
-                temperature=temperature,
-                max_output_tokens=max_tokens,
-            )
-            return response.output_text
-
-    def _call_chat(
-        self, messages: list[dict], temperature: float, max_tokens: int
-    ) -> str:
-        """Multi-turn generation: send a message history, get a text response."""
-        if self.provider == "mistral":
-            response = self.client.chat.completions.create(
-                model=self.model_name,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-            )
-            return response.choices[0].message.content or ""
-        else:
-            response = self.client.responses.create(
-                model=self.model_name,
-                input=messages,
-                temperature=temperature,
-                max_output_tokens=max_tokens,
-            )
-            return response.output_text
-
-    def _call_stream(
-        self, prompt: str, temperature: float, max_tokens: int
-    ) -> Iterator[str]:
-        """Streaming single-turn generation."""
-        if self.provider == "mistral":
-            stream = self.client.chat.completions.create(
-                model=self.model_name,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=temperature,
-                max_tokens=max_tokens,
-                stream=True,
-            )
-            for chunk in stream:
-                if chunk.choices[0].delta.content:
-                    yield chunk.choices[0].delta.content
-        else:
-            stream = self.client.responses.create(
-                model=self.model_name,
-                input=prompt,
-                temperature=temperature,
-                max_output_tokens=max_tokens,
-                stream=True,
-            )
-            for event in stream:
-                if event.type == "response.output_text.delta":
-                    yield event.delta
 
     def generate(
         self,
@@ -163,44 +123,33 @@ class RAGGenerator:
         temperature: float | None = None,
         max_tokens: int | None = None,
     ) -> str:
-        """Generate an answer using retrieved context."""
-        if temperature is None:
-            temperature = self.default_temperature
-        if max_tokens is None:
-            max_tokens = self.default_max_tokens
-
-        context = self._format_context(context_docs)
-        prompt = GERMAN_RAG_PROMPT.format(context=context, query=query)
-
+        prompt = GERMAN_RAG_PROMPT.format(context=format_context(context_docs), query=query)
         try:
-            return self._call(prompt, temperature, max_tokens)
+            result = self._agent.run_sync(prompt, model_settings=_settings(temperature, max_tokens))
+            return result.output
         except Exception as e:
-            print(f"Error generating response: {e}")
-            return f"Entschuldigung, es gab einen Fehler bei der Generierung der Antwort: {e}"
+            return ERROR_MESSAGE.format(error=e)
 
     def build_system_message(self, context_docs: list[RetrievalResult]) -> dict:
-        """Build a system message with RAG context for multi-turn chat."""
-        context = self._format_context(context_docs)
-        content = GERMAN_RAG_CHAT_SYSTEM_PROMPT.format(context=context)
+        content = GERMAN_RAG_CHAT_SYSTEM_PROMPT.format(context=format_context(context_docs))
         return {"role": "system", "content": content}
 
-    def chat(
+    async def chat(
         self,
         messages: list[dict],
         temperature: float | None = None,
         max_tokens: int | None = None,
     ) -> str:
-        """Generate a response using a message history (multi-turn chat)."""
-        if temperature is None:
-            temperature = self.default_temperature
-        if max_tokens is None:
-            max_tokens = self.default_max_tokens
-
+        history, prompt = split_conversation(messages)
         try:
-            return self._call_chat(messages, temperature, max_tokens)
+            result = await self._agent.run(
+                prompt,
+                message_history=history,
+                model_settings=_settings(temperature, max_tokens),
+            )
+            return result.output
         except Exception as e:
-            print(f"Error generating chat response: {e}")
-            return f"Entschuldigung, es gab einen Fehler bei der Generierung der Antwort: {e}"
+            return ERROR_MESSAGE.format(error=e)
 
     def generate_stream(
         self,
@@ -209,17 +158,11 @@ class RAGGenerator:
         temperature: float | None = None,
         max_tokens: int | None = None,
     ) -> Iterator[str]:
-        """Generate an answer with streaming (for real-time display)."""
-        if temperature is None:
-            temperature = self.default_temperature
-        if max_tokens is None:
-            max_tokens = self.default_max_tokens
-
-        context = self._format_context(context_docs)
-        prompt = GERMAN_RAG_PROMPT.format(context=context, query=query)
-
+        prompt = GERMAN_RAG_PROMPT.format(context=format_context(context_docs), query=query)
         try:
-            yield from self._call_stream(prompt, temperature, max_tokens)
+            result = self._agent.run_stream_sync(
+                prompt, model_settings=_settings(temperature, max_tokens)
+            )
+            yield from result.stream_text(delta=True)
         except Exception as e:
-            print(f"Error generating response: {e}")
-            yield f"Entschuldigung, es gab einen Fehler bei der Generierung der Antwort: {e}"
+            yield ERROR_MESSAGE.format(error=e)

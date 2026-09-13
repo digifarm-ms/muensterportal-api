@@ -1,11 +1,14 @@
 """Application configuration via Pydantic Settings."""
 
 from pathlib import Path
+from typing import Literal
 
 from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from muenster4you.websearch import SearchDepth
+
+LLMProvider = Literal["ollama", "mistral"]
 
 
 class AppConfig(BaseSettings):
@@ -22,8 +25,7 @@ class AppConfig(BaseSettings):
     # Embeddings
     embedding_model: str = "jinaai/jina-embeddings-v5-text-nano-retrieval"
 
-    # LLM provider: "ollama" or "mistral"
-    llm_provider: str = "ollama"
+    llm_provider: LLMProvider = "ollama"
     generation_model: str = "qwen3:30b"
     ollama_url: str = "http://localhost:11434"
     mistral_api_key: str = Field(
