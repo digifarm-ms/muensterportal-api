@@ -42,6 +42,7 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "-v"
+asyncio_mode = "auto"
 
 [build-system]
 requires = ["uv_build>=0.9.3,<0.12.0"]
