@@ -8,6 +8,7 @@ from itertools import batched
 from pathlib import Path
 
 import mwparserfromhell
+from mwparserfromhell.nodes import Tag
 from sentence_transformers import SentenceTransformer
 from sentence_transformers.util import get_device_name
 from tqdm import tqdm
@@ -19,9 +20,31 @@ from muenster4you.lancedb import (
 from muenster4you.mediawiki import SQLiteMediaWiki
 from muenster4you.types import BaseWikiPage, WikiPage
 
+REMOVED_TAGS = {"ref", "references", "gallery", "display_map", "widget", "noinclude"}
+
+
+def _cells(row: Tag) -> list[str]:
+    return [
+        cell.contents.strip_code().strip()
+        for cell in row.contents.filter_tags(
+            matches=lambda n: str(n.tag) in ("td", "th"), recursive=False
+        )
+    ]
+
+
+def _table_to_text(table: Tag) -> str:
+    header = _cells(table)
+    rows = table.contents.filter_tags(matches=lambda n: str(n.tag) == "tr", recursive=False)
+    lines = [" | ".join(header)] + [" | ".join(_cells(row)) for row in rows]
+    return "\n" + "\n".join(line for line in lines if line.strip(" |")) + "\n"
+
 
 def clean_wikitext(content: str) -> str:
-    """Clean MediaWiki markup to extract plain text suitable for embedding."""
+    """Clean MediaWiki markup to extract plain text suitable for embedding.
+
+    Tables become one line per row with cells separated by " | ", so that
+    addresses, opening hours and coordinates stay attached to their entry.
+    """
     if not content:
         return ""
 
@@ -32,7 +55,11 @@ def clean_wikitext(content: str) -> str:
             with contextlib.suppress(ValueError):
                 wikicode.remove(template)
 
-        for tag in wikicode.filter_tags():
+        for table in wikicode.filter_tags(matches=lambda n: str(n.tag) == "table"):
+            with contextlib.suppress(ValueError):
+                wikicode.replace(table, _table_to_text(table))
+
+        for tag in wikicode.filter_tags(matches=lambda n: str(n.tag) in REMOVED_TAGS):
             with contextlib.suppress(ValueError):
                 wikicode.remove(tag)
 
