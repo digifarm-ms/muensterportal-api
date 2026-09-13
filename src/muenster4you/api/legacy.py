@@ -10,7 +10,7 @@ from sentence_transformers import SentenceTransformer
 from tavily import TavilyClient
 
 from muenster4you.config import AppConfig
-from muenster4you.embedder import SentenceTransformerEmbedder
+from muenster4you.embedder import SentenceTransformerEmbedder, load_embedder
 from muenster4you.language import detect_language
 from muenster4you.llm import build_model
 from muenster4you.rag.generation import RAGGenerator
@@ -34,7 +34,7 @@ ConfigDep = Annotated[AppConfig, Depends(get_config)]
 
 @lru_cache
 def get_embedding_model(config: ConfigDep) -> SentenceTransformer:
-    return SentenceTransformer(model_name_or_path=config.embedding_model, trust_remote_code=True)
+    return load_embedder(config.embedding_model)
 
 
 EmbeddingModelDep = Annotated[SentenceTransformer, Depends(get_embedding_model)]
