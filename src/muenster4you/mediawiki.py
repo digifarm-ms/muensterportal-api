@@ -71,7 +71,7 @@ class SQLiteMediaWiki:
             r.rev_id,
             r.rev_timestamp
         FROM page p
-        JOIN revision r ON p.page_id = r.rev_page
+        JOIN revision r ON r.rev_id = p.page_latest
         JOIN slots s ON r.rev_id = s.slot_revision_id
         JOIN content c ON s.slot_content_id = c.content_id
         JOIN text t ON CAST(substr(c.content_address, 4) AS INTEGER) = t.old_id

@@ -37,3 +37,12 @@ class LanceDBMediaWiki:
             .when_not_matched_insert_all()
             .execute(pages)
         )
+
+    def delete_pages_not_in(self, ids: list[int]) -> int:
+        """Remove rows whose page id is no longer present in the wiki. Returns rows deleted."""
+        before = self.table.count_rows()
+        if ids:
+            self.table.delete(f"id NOT IN ({', '.join(str(i) for i in ids)})")
+        else:
+            self.table.delete("true")
+        return before - self.table.count_rows()

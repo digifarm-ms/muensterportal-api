@@ -113,8 +113,12 @@ def ingest(
     raw_pages = load_pages_from_media_wiki(sqlite, namespace)
     pages = clean_pages(raw_pages)
     pages_with_embeddings = add_embeddings(pages, embedder, batch_size)
+    ingested_ids: list[int] = []
     for batch in batched(pages_with_embeddings, 50, strict=False):
         lance.upsert_pages(list(batch))
+        ingested_ids.extend(page["id"] for page in batch)
+    deleted = lance.delete_pages_not_in(ingested_ids)
+    print(f"upserted {len(ingested_ids)} pages, deleted {deleted} stale rows")
 
 
 def main() -> None:
