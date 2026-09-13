@@ -30,7 +30,12 @@ class AppConfig(BaseSettings):
         default="",
         validation_alias=AliasChoices("MISTRAL_API_KEY"),
     )
-    mistral_model: str = "mistral-small-latest"
+    # Pin a dated release (Mistral's production recommendation) rather than the
+    # "-latest" alias so upgrades are explicit. Our workspace's plan currently
+    # entitles only the Ministral 3 family, Nemo and Codestral; mistral-small-2603
+    # (Small 4) and mistral-medium-2604 (Medium 3.5) return 429 with a 0 req/min
+    # limit. Switch back to mistral-small-2603 once billing/workspace is sorted.
+    mistral_model: str = "ministral-14b-2512"
 
     # Generation parameters
     default_temperature: float = 0.7

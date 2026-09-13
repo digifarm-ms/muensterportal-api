@@ -4,6 +4,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 import numpy as np
+
 from lancedb import connect
 from muenster4you.embedder import TextEmbedder
 from muenster4you.lancedb import WIKIPAGE_TABLE_NAME
