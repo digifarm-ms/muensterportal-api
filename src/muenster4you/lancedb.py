@@ -18,7 +18,6 @@ class LanceDBWikiPage(LanceModel):
     content: str
     rev_id: int
     rev_timestamp: datetime
-    rev_actor: str
     embedding: Vector(EMBEDDING_DIM)  # type: ignore[reportInvalidTypeForm]
 
 

@@ -67,7 +67,6 @@ def load_pages_from_media_wiki(
             "content": page.content,
             "rev_id": page.rev_id,
             "rev_timestamp": page.rev_timestamp,
-            "rev_actor": page.rev_actor,
         }
 
 

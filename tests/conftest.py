@@ -33,7 +33,6 @@ def retriever_with_pages(numpy_rng: Generator) -> LanceDBRetriever:
                 "content": "Münster ist eine Stadt in Nordrhein-Westfalen.",
                 "rev_id": 1,
                 "rev_timestamp": datetime(2024, 1, 1),
-                "rev_actor": "tester",
                 "embedding": numpy_rng.standard_normal(EMBEDDING_DIM, dtype=np.float32),
             },
             {
@@ -43,7 +42,6 @@ def retriever_with_pages(numpy_rng: Generator) -> LanceDBRetriever:
                 "content": "Der Aasee ist ein See im Süden von Münster.",
                 "rev_id": 1,
                 "rev_timestamp": datetime(2024, 1, 1),
-                "rev_actor": "tester",
                 "embedding": numpy_rng.standard_normal(EMBEDDING_DIM, dtype=np.float32),
             },
         ]

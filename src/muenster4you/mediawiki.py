@@ -24,11 +24,10 @@ class MediaWikiPage:
     content: str
     rev_id: int
     rev_timestamp: datetime
-    rev_actor: str
 
     @classmethod
     def from_db_row(cls, row: Row) -> Self:
-        id_, namespace, title, content, rev_id, rev_timestamp_str, rev_actor = row
+        id_, namespace, title, content, rev_id, rev_timestamp_str = row
         rev_timestamp = datetime.strptime(rev_timestamp_str, "%Y%m%d%H%M%S")
         return cls(
             id=id_,
@@ -37,7 +36,6 @@ class MediaWikiPage:
             content=content,
             rev_id=rev_id,
             rev_timestamp=rev_timestamp,
-            rev_actor=rev_actor,
         )
 
 
@@ -71,11 +69,9 @@ class SQLiteMediaWiki:
             p.page_title AS title,
             t.old_text AS content,
             r.rev_id,
-            r.rev_timestamp,
-            a.actor_name AS rev_actor
+            r.rev_timestamp
         FROM page p
         JOIN revision r ON p.page_id = r.rev_page
-        JOIN actor a ON r.rev_actor = a.actor_id
         JOIN slots s ON r.rev_id = s.slot_revision_id
         JOIN content c ON s.slot_content_id = c.content_id
         JOIN text t ON CAST(substr(c.content_address, 4) AS INTEGER) = t.old_id

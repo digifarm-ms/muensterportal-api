@@ -13,7 +13,6 @@ class BaseWikiPage(TypedDict):
     content: str
     rev_id: int
     rev_timestamp: datetime
-    rev_actor: str
 
 
 class WikiPage(BaseWikiPage):
