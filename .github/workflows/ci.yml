@@ -9,15 +9,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Deploy over SSH
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
+            # Abort on the first failing command. Without this, a failed
+            # `docker compose build` falls through to `up -d`, which restarts
+            # the old image, and the job still reports success.
+            set -euo pipefail
             cd muensterportal-api
 
             # Fetch + hard reset rather than pull. A `git pull` merges, so it
