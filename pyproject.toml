@@ -53,6 +53,13 @@ build-backend = "uv_build"
 [tool.uv]
 default-groups = "all"
 
+# mwparserfromhell 0.7.2 ships no cp314 wheels, so it builds from source.
+# "optional" compiles the C tokenizer where a compiler exists (dev machines)
+# and falls back to the pure-Python tokenizer where none does (the slim Docker
+# image, which never imports it anyway). Drop once a release ships cp314 wheels.
+[tool.uv.extra-build-variables]
+mwparserfromhell = { WITH_EXTENSION = "optional" }
+
 [tool.uv.sources]
 torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
 
